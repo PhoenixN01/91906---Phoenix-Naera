@@ -3,6 +3,10 @@ from tkinter import messagebox
 from tkinter import ttk
 from datetime import datetime
 
+class statusIndicator:
+    def __init__(self):
+        pass
+
 class disasterApp:
     def __init__(self, root):
         self.root = root
@@ -25,10 +29,11 @@ class disasterApp:
         self.all_status_frame.pack(fill="x", expand=True)
     
     def create_frames(self):
-        """Creates the layout structure of the GUI\
+        """Creates the layout structure of the GUI
         
-        The usage of frames allows GUI elements to be placed without 
-        encountering issues of mixing information across the GUI
+        The usage of create_frames when creating frames used to control 
+        the positioning and layout of items on screen keeps code
+        consisten and separate from the widgets (elements) of the GUI
         """
         self.main_frame = ttk.Frame(self.root)
         self.refresh_frame = ttk.Frame(self.main_frame)
@@ -64,6 +69,13 @@ class disasterApp:
             ttk.Frame(self.earthquake_frame, padding=10)
     
     def create_widgets(self):
+        """Creates the widgets for the GUI
+
+        create_widgets is used when creating all of the elements seen 
+        on-screen by users and is responsible for populating each
+        frame regardless of their display setting
+        """
+        # Refresh tag at top of GUI
         self.last_refresh_label = ttk.Label(
             self.refresh_frame, 
             text=f"Last refreshed at:    {self.last_all_refresh}",
@@ -71,6 +83,7 @@ class disasterApp:
             )
         self.last_refresh_label.pack(side="top")
 
+        # Current Location Display
         self.current_location_label = ttk.Label(
             self.location_frame,
             text="Current Location: ____, ______",
@@ -90,6 +103,78 @@ class disasterApp:
             padding=(10, 0)
         )
         self.search_radius_label.grid(row=1, column=0)
+
+        # Main Status Display (home screen)
+        self.all_status_title = ttk.Label(
+            self.all_status_frame,
+            text="Status",
+            padding=10
+        )
+
+        self.all_status_row1 = ttk.Frame(
+            self.all_status_frame,
+            padding=(10,2.5)
+        )
+        self.all_status_row1.pack()
+
+        # Status Indicator Here
+
+        self.all_status_w_label = ttk.Label(
+            self.all_status_row1,
+            text="Weather: Normal",
+            padding=10
+        )
+        self.all_status_w_label.pack()
+        
+        self.all_status_w_button = ttk.Button(
+            self.all_status_row1,
+            text="View Weather Details",
+        )
+        self.all_status_w_button.pack(side="right", anchor="w")
+
+        self.all_status_row2 = ttk.Frame(
+            self.all_status_frame,
+            padding=(10,2.5)
+        )
+        self.all_status_row2.pack()
+
+        self.all_status_f_label = ttk.Label(
+            self.all_status_row2,
+            text="Flood Risk: Moderate",
+            padding=10
+        )
+        self.all_status_f_label.pack()
+
+        self.all_status_f_button = ttk.Button(
+            self.all_status_row2,
+            text="View Flood Alerts",
+            padding=10
+        )
+        self.all_status_f_button.pack(side="right", anchor="w")
+
+        self.all_status_row3 = ttk.Frame(
+            self.all_status_frame,
+            padding=(10,2.5)
+        )
+        self.all_status_row3.pack()
+
+        self.all_status_q_label = ttk.Label(
+            self.all_status_row3,
+            text="Earthquake Alert: Severe"
+        )
+        self.all_status_q_label.pack()
+
+        self.all_status_q_button = ttk.Button(
+            self.all_status_row3,
+            text="View Earthquake Alerts",
+            padding=10
+        )
+        self.all_status_q_button.pack(side="right", anchor="w")
+
+
+
+
+
 
         
         
