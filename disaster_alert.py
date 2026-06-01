@@ -56,27 +56,53 @@ class disasterApp:
 
         # All frames for Weather-specific window
         self.weather_frame = ttk.Frame(self.main_frame)
-        self.w_status_frame = \
-            ttk.Frame(self.weather_frame, padding=10)
-        self.w_info_container = \
-            ttk.Frame(self.weather_frame, padding=10)
-        self.w_info_row1 = \
-            ttk.Frame(self.w_info_container, padding=10)
-        self.w_info_row2 = \
-            ttk.Frame(self.w_info_container, padding=10)
-        self.w_info_sunCol = \
-            ttk.Frame(self.w_info_row1, padding=10)
-        self.w_footer_frame = \
-            ttk.Frame(self.weather_frame, padding=10)
+
+        self.w_status_frame =ttk.Frame(
+            self.weather_frame, padding=10
+        )
+        self.w_status_frame.pack()
+
+        self.w_info_container = ttk.Frame(
+            self.weather_frame, padding=10
+        )
+        self.w_info_container.pack()
+
+        self.w_info_row1 = ttk.Frame(
+            self.w_info_container, padding=10
+        )
+        self.w_info_row1.pack()
+
+        self.w_info_row2 = ttk.Frame(
+            self.w_info_container, padding=10
+        )
+        self.w_info_row2.pack()
+
+        self.w_info_sunCol = ttk.Frame(
+            self.w_info_row1, padding=10
+        )
+        self.w_info_sunCol.grid(row=0, column=0)
+
+        self.w_info_rainCol = ttk.Frame(
+            self.w_info_row1, padding=10
+        )
+        self.w_info_rainCol.grid(row=0, column=2)
+
+        self.w_footer_frame = ttk.Frame(self.weather_frame, padding=10)
         
         # All frames for flood-specific window
         self.flood_frame = ttk.Frame(self.main_frame)
-        self.f_title_frame = \
-            ttk.Frame(self.flood_frame, padding=10)
-        self.f_info_container = \
-            ttk.Frame(self.flood_frame, padding=10)
-        self.f_footer_frame = \
-            ttk.Frame(self.flood_frame, padding=10)
+        self.f_title_frame = ttk.Frame(
+            self.flood_frame, padding=10
+        )
+        self.f_info_container = ttk.Frame(
+            self.flood_frame, padding=10
+        )
+        self.f_status_container = ttk.Frame(
+            self.f_info_container, padding=10
+        )
+        self.f_footer_frame = ttk.Frame(
+            self.flood_frame, padding=10
+        )
         
         # All frames for earthquake-specific window
         self.earthquake_frame = ttk.Frame(self.main_frame, padding=10)
@@ -92,6 +118,7 @@ class disasterApp:
         self.location_frame.pack(fill="x", expand=True)
         self.location_frame.grid_columnconfigure(1, weight=1)
         self.all_status_frame.pack(fill="x", expand=True)
+        # self.weather_frame.pack(fill="x", expand=True)
     
     def create_widgets(self):
         """Creates the widgets for the GUI
@@ -241,7 +268,7 @@ class disasterApp:
         self.all_sync_button.pack(pady=10)
 
 
-        # Weather Specific Window
+        # ---- Weather Specific Window ----
 
 
         # Weather Main Status
@@ -268,11 +295,114 @@ class disasterApp:
         )
 
         # Weather Information (From API)
-        self.weather_sunrise = ttk.Label(
+        self.weather_sunrise_label = ttk.Label(
             self.w_info_sunCol,
             text="Sunrise: 7:15am",
-            padding=10)
+            padding=[0, 10]
+        )
+        self.weather_sunrise_label.grid(row=0, column=0)
+
+        self.weather_sunset_label = ttk.Label(
+            self.w_info_sunCol,
+            text="Sunset: 6:50pm",
+            padding=[0, 10]
+        )
+        self.weather_sunset_label.grid(row=1, column=0)
+
+        self.weather_temp_label = ttk.Label(
+            self.w_info_row1,
+            text="Current Temperature: 18℃\n\n(feels like: 14℃)",
+            padding=10
+        )
+        self.weather_temp_label.grid(row=0, column=1)
+
+        self.weather_rain_chance_label = ttk.Label(
+            self.w_info_rainCol,
+            text="Chance of Rain:\n20%",
+            padding=10
+        )
+        self.weather_rain_chance_label.grid(row=0, column=0)
+
+        self.weather_cloud_cover_label = ttk.Label(
+            self.w_info_rainCol,
+            text="40% Cloud Cover",
+            padding=[0, 10]
+        )
+        self.weather_cloud_cover_label.grid(row=1, column=0)
+
+        self.weather_wind_speed_label = ttk.Label(
+            self.w_info_row2,
+            text="Wind Speeds: \n10km/h",
+            padding=10
+        )
+        self.weather_wind_speed_label.grid(row=0, column=0)
         
+        self.weather_wind_gusts_label = ttk.Label(
+            self.w_info_row2,
+            text="Wind Gusts: \n10km/h",
+            padding=10
+        )
+        self.weather_wind_gusts_label.grid(row=0, column=1)
+
+        self.weather_humidity_label = ttk.Label(
+            self.w_info_row2,
+            text="Humidity: \n85%",
+            padding=10
+        )
+        self.weather_humidity_label.grid(row=0, column=2)
+        
+        self.weather_surface_pressure_label = ttk.Label(
+            self.w_info_row2,
+            text="Surface Pressure: \n1013hPa",
+            padding=10
+        )
+        self.weather_surface_pressure_label.grid(row=0, column=3)
+
+        # ---- Flood Specific Window ----
+
+        # Flood Screen Title
+        self.flood_screen_title = ttk.Label(
+            self.flood_frame,
+            text="Flood Alerts: ",
+            padding=10
+        )
+        self.flood_screen_title.pack()
+
+        # Flood Information (From API)
+        self.flood_status_indicator = statusIndicator(
+            self.f_info_container
+        )
+        self.flood_status_indicator.grid(row=0, column=0, padx=10)
+
+        self.flood_status_message = ttk.Label(
+            self.f_info_container,
+            text="Flood Risk: Low"
+        )
+        self.flood_status_message.grid(row=0, column=0, padx=10)
+
+        self.flood_status_description = ttk.Label(
+            self.f_info_container,
+            text="",
+            padding=10
+        )
+        self.flood_status_description.grid(row=1, column=0)
+
+        self.flood_rainfall_activity = ttk.Treeview(
+            self.f_info_container,
+            columns=("Datetime", "Rainfall", "Change")
+        )
+        self.flood_rainfall_activity.heading(
+            "Datetime", text="Date & Time"
+        )
+        self.flood_rainfall_activity.heading(
+            "Rainfall", text="Detected Rainfall"
+        )
+        self.flood_rainfall_activity.heading(
+            "Change", text="Change"
+        )
+        self.flood_rainfall_activity.grid(row=0, column=0, rowspan=1)
+
+
 
 
 
