@@ -53,6 +53,7 @@ class disasterApp:
 
         self.all_status_frame = ttk.Frame(self.main_frame, padding=10)
         self.footer_frame = ttk.Frame(self.main_frame, padding=10)
+        self.footer_frame.columnconfigure(1, weight=1)
 
         # All frames for Weather-specific window
         self.weather_frame = ttk.Frame(self.main_frame)
@@ -86,39 +87,56 @@ class disasterApp:
             self.w_info_row1, padding=10
         )
         self.w_info_rainCol.grid(row=0, column=2)
-
-        self.w_footer_frame = ttk.Frame(self.weather_frame, padding=10)
         
         # All frames for flood-specific window
         self.flood_frame = ttk.Frame(self.main_frame)
+
         self.f_title_frame = ttk.Frame(
             self.flood_frame, padding=10
         )
+        self.f_title_frame.pack()
+
         self.f_info_container = ttk.Frame(
             self.flood_frame, padding=10
         )
+        self.f_info_container.rowconfigure(1, weight=1)
+        self.f_info_container.pack()
+
         self.f_status_container = ttk.Frame(
             self.f_info_container, padding=10
         )
-        self.f_footer_frame = ttk.Frame(
-            self.flood_frame, padding=10
-        )
+        self.f_status_container.columnconfigure(1, weight=1)
+        self.f_status_container.grid(row=0, column=0, sticky="nw")
         
         # All frames for earthquake-specific window
-        self.earthquake_frame = ttk.Frame(self.main_frame, padding=10)
-        self.q_status_frame = \
-            ttk.Frame(self.earthquake_frame, padding=10)
-        self.q_info_container = \
-            ttk.Frame(self.earthquake_frame, padding=10)
-        self.q_footer_frame = \
-            ttk.Frame(self.earthquake_frame, padding=10)
+        self.earthquake_frame = ttk.Frame(self.main_frame)
+
+        self.q_title_frame = ttk.Frame(
+            self.earthquake_frame, padding=10
+        )
+        self.q_title_frame.pack()
+
+        self.q_info_container = ttk.Frame(
+            self.earthquake_frame, padding=10
+        )
+        self.q_info_container.rowconfigure(1, weight=1)
+        self.q_info_container.pack()
+        
+        self.q_status_container = ttk.Frame(
+            self.q_info_container, padding=10
+        )
+        self.q_status_container.columnconfigure(1, weight=1)
+        self.q_status_container.grid(row=0, column=0, sticky="nw")
         
         self.main_frame.pack(fill="both", expand=True)
         self.refresh_frame.pack(fill="x")
         self.location_frame.pack(fill="x", expand=True)
         self.location_frame.grid_columnconfigure(1, weight=1)
-        self.all_status_frame.pack(fill="x", expand=True)
+        # self.all_status_frame.pack(fill="x", expand=True)
         # self.weather_frame.pack(fill="x", expand=True)
+        # self.flood_frame.pack(fill="x", expand=True)
+        self.earthquake_frame.pack(fill="x", expand=True)
+        self.footer_frame.pack(fill="x", expand=False)
     
     def create_widgets(self):
         """Creates the widgets for the GUI
@@ -215,7 +233,7 @@ class disasterApp:
 
         self.all_status_f_label = ttk.Label(
             self.all_status_row2,
-            text="Flood Risk: Moderate",
+            text="Flood Risk: Low",
             padding=10
         )
         self.all_status_f_label.grid(row=0, column=1)
@@ -247,7 +265,7 @@ class disasterApp:
 
         self.all_status_q_label = ttk.Label(
             self.all_status_row3,
-            text="Earthquake Alert: Severe",
+            text="Earthquake Alert: Low",
             padding=10
         )
         self.all_status_q_label.grid(row=0, column=1)
@@ -259,13 +277,19 @@ class disasterApp:
         )
         self.all_status_q_button.grid(row=0, column=3, sticky="e")
 
-        # API Sync Button ("Server sync")
-        self.all_sync_button = ttk.Button(
-            self.main_frame, 
-            text="Sync all from servers", 
+        self.back_home_button = ttk.Button(
+            self.footer_frame,
+            text="Back home",
             padding=10
         )
-        self.all_sync_button.pack(pady=10)
+
+        # API Sync Button ("Server sync")
+        self.all_sync_button = ttk.Button(
+            self.footer_frame, 
+            text="Sync from Servers", 
+            padding=10
+        )
+        self.all_sync_button.grid(row=0, column=1, sticky="s")
 
 
         # ---- Weather Specific Window ----
@@ -362,7 +386,7 @@ class disasterApp:
 
         # Flood Screen Title
         self.flood_screen_title = ttk.Label(
-            self.flood_frame,
+            self.f_title_frame,
             text="Flood Alerts: ",
             padding=10
         )
@@ -370,15 +394,15 @@ class disasterApp:
 
         # Flood Information (From API)
         self.flood_status_indicator = statusIndicator(
-            self.f_info_container
+            self.f_status_container
         )
-        self.flood_status_indicator.grid(row=0, column=0, padx=10)
+        self.flood_status_indicator.grid(row=0, column=0)
 
         self.flood_status_message = ttk.Label(
-            self.f_info_container,
+            self.f_status_container,
             text="Flood Risk: Low"
         )
-        self.flood_status_message.grid(row=0, column=0, padx=10)
+        self.flood_status_message.grid(row=0, column=1, padx=10)
 
         self.flood_status_description = ttk.Label(
             self.f_info_container,
@@ -391,16 +415,88 @@ class disasterApp:
             self.f_info_container,
             columns=("Datetime", "Rainfall", "Change")
         )
+        self.flood_rainfall_activity.column(
+            "#0", width=0, stretch=tk.NO
+        )
+        self.flood_rainfall_activity.column(
+            "Datetime", width=130, anchor=tk.E
+        )
+        self.flood_rainfall_activity.column(
+            "Rainfall", width=100, anchor=tk.CENTER
+        )
+        self.flood_rainfall_activity.column(
+            "Change", width=100, anchor=tk.W
+        )
         self.flood_rainfall_activity.heading(
             "Datetime", text="Date & Time"
         )
         self.flood_rainfall_activity.heading(
-            "Rainfall", text="Detected Rainfall"
+            "Rainfall", text="Rainfall"
         )
         self.flood_rainfall_activity.heading(
             "Change", text="Change"
         )
-        self.flood_rainfall_activity.grid(row=0, column=0, rowspan=1)
+        self.flood_rainfall_activity.grid(
+            row=0, 
+            column=1, 
+            rowspan=1,
+            sticky="e"
+        )
+
+        # ---- Earthquake Specific Window ----
+
+        # Earthquake Screen Title
+        self.earthquake_screen_title = ttk.Label(
+            self.q_title_frame,
+            text="Earthquake Alerts: ",
+            padding=10
+        )
+        self.earthquake_screen_title.pack()
+
+        # Earthquake Information (From API)
+        self.earthquake_status_indicator = statusIndicator(
+            self.q_status_container
+        )
+        self.earthquake_status_indicator.grid(row=0, column=0)
+
+        self.earthquake_status_message = ttk.Label(
+            self.q_status_container,
+            text="Earthquake Activity: \nLow"
+        )
+        self.earthquake_status_message.grid(row=0, column=1, padx=10)
+
+        self.earthquake_status_description = ttk.Label(
+            self.q_info_container,
+            text="",
+            padding=10
+        )
+        self.earthquake_status_description.grid(row=1, column=0)
+
+        self.earthquake_seismic_activity = ttk.Treeview(
+            self.q_info_container,
+            columns=("Datetime", "Seismic")
+        )
+        self.earthquake_seismic_activity.column(
+            "#0", width=0, stretch=tk.NO
+        )
+        self.earthquake_seismic_activity.column(
+            "Datetime", width=130, anchor=tk.E
+        )
+        self.earthquake_seismic_activity.column(
+            "Seismic", width=170, anchor=tk.CENTER
+        )
+        self.earthquake_seismic_activity.heading(
+            "Datetime", text="Date & Time"
+        )
+        self.earthquake_seismic_activity.heading(
+            "Seismic", text="Seismic Activity"
+        )
+        self.earthquake_seismic_activity.grid(
+            row=0, 
+            column=1, 
+            rowspan=1,
+            sticky="e"
+        )
 
 
 
