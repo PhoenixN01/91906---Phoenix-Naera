@@ -53,7 +53,9 @@ class disasterApp:
 
         self.all_status_frame = ttk.Frame(self.main_frame, padding=10)
         self.footer_frame = ttk.Frame(self.main_frame, padding=10)
+        self.footer_frame.columnconfigure(0, weight=0)
         self.footer_frame.columnconfigure(1, weight=1)
+        self.footer_frame.columnconfigure(2, weight=1)
 
         # All frames for Weather-specific window
         self.weather_frame = ttk.Frame(self.main_frame)
@@ -132,11 +134,11 @@ class disasterApp:
         self.refresh_frame.pack(fill="x")
         self.location_frame.pack(fill="x", expand=True)
         self.location_frame.grid_columnconfigure(1, weight=1)
-        # self.all_status_frame.pack(fill="x", expand=True)
+        self.all_status_frame.pack(fill="x", expand=True)
         # self.weather_frame.pack(fill="x", expand=True)
         # self.flood_frame.pack(fill="x", expand=True)
-        self.earthquake_frame.pack(fill="x", expand=True)
-        self.footer_frame.pack(fill="x", expand=False)
+        # self.earthquake_frame.pack(fill="x", expand=True)
+        self.footer_frame.pack(side=tk.BOTTOM, fill="x", expand=False)
     
     def create_widgets(self):
         """Creates the widgets for the GUI
@@ -209,7 +211,8 @@ class disasterApp:
         self.all_status_w_button = ttk.Button(
             self.all_status_row1,
             text="View Weather Details",
-            padding=10
+            padding=10,
+            command=self.show_weather_display
         )
         self.all_status_w_button.grid(row=0, column=3, sticky="e")
 
@@ -241,7 +244,8 @@ class disasterApp:
         self.all_status_f_button = ttk.Button(
             self.all_status_row2,
             text="View Flood Alerts",
-            padding=10
+            padding=10,
+            command=self.show_flood_display
         )
         self.all_status_f_button.grid(row=0, column=3, sticky="e")
 
@@ -273,21 +277,25 @@ class disasterApp:
         self.all_status_q_button = ttk.Button(
             self.all_status_row3,
             text="View Earthquake Alerts",
-            padding=10
+            padding=10,
+            command=self.show_earthquake_display
         )
         self.all_status_q_button.grid(row=0, column=3, sticky="e")
 
         self.back_home_button = ttk.Button(
             self.footer_frame,
             text="Back home",
-            padding=10
+            padding=5,
+            command=self.show_home_display
         )
+        self.back_home_button.grid(row=0, column=0, sticky="w")
+        self.back_home_button.state(['disabled'])
 
-        # API Sync Button ("Server sync")
+        # Footer Buttons
         self.all_sync_button = ttk.Button(
             self.footer_frame, 
             text="Sync from Servers", 
-            padding=10
+            padding=5
         )
         self.all_sync_button.grid(row=0, column=1, sticky="s")
 
@@ -497,12 +505,38 @@ class disasterApp:
             rowspan=1,
             sticky="e"
         )
+    
+    def show_home_display(self):
+        self.all_status_frame.pack(fill="x", expand=True)
+        self.weather_frame.pack_forget()
+        self.flood_frame.pack_forget()
+        self.earthquake_frame.pack_forget()
+        self.back_home_button.grid_forget()
+        self.footer_frame.columnconfigure(0, weight=0)
+    
+    def show_weather_display(self):
+        self.all_status_frame.pack_forget()
+        self.weather_frame.pack(fill="x", expand=True)
+        self.flood_frame.pack_forget()
+        self.earthquake_frame.pack_forget()
+        self.back_home_button.grid(row=0, column=0, sticky="w")
+        self.footer_frame.columnconfigure(0, weight=1)
 
-
-
-
-
-        
+    def show_flood_display(self):
+        self.all_status_frame.pack_forget()
+        self.weather_frame.pack_forget()
+        self.flood_frame.pack(fill="x", expand=True)
+        self.earthquake_frame.pack_forget()
+        self.back_home_button.grid(row=0, column=0, sticky="w")
+        self.footer_frame.columnconfigure(0, weight=1)
+    
+    def show_earthquake_display(self):
+        self.all_status_frame.pack_forget()
+        self.weather_frame.pack_forget()
+        self.flood_frame.pack_forget()
+        self.earthquake_frame.pack(fill="x", expand=True)
+        self.back_home_button.grid(row=0, column=0, sticky="w")
+        self.footer_frame.columnconfigure(0, weight=1)
         
 root = tk.Tk()
 app = disasterApp(root)
