@@ -2,6 +2,17 @@ import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
 from datetime import datetime
+from geopy.geocoders import Nominatim
+import json
+import os
+
+CITIES_FILE = "cities.json"
+
+def load_cities():
+    with open(CITIES_FILE, "r") as f:
+        return json.load(f)
+    
+CITIES = load_cities()
 
 class statusIndicator(tk.Canvas):
     def __init__(self, parent):
@@ -18,9 +29,155 @@ class statusIndicator(tk.Canvas):
             fill="#33FF00",
             outline="black"
         )
- 
+
     def setColour(self, colour):
         self.itemconfig(self.light, fill=colour)
+    
+class autocompleteEntry(ttk.Frame):
+    def __init__(self, parent, options, current_info):
+        super().__init__(parent)
+
+        self.options = options
+
+        self.current_info = current_info
+
+        self.location_entry = ttk.Entry(self, width=30)
+        self.radius_entry = ttk.Entry(self, width=30)
+
+        if current_info:
+            self.location_entry.insert(0, self.current_info[0])
+            self.radius_entry.insert(0, self.current_info[1])
+
+        self.location_entry.pack(fill="x")
+        self.radius_entry.pack(fill="x")
+
+        self.listbox = tk.Listbox(self, height=5)
+        self.listbox.pack(fill="x")
+
+        self.location_entry.bind(
+            "<KeyRelease>", self.update_suggestions
+        )
+        self.listbox.bind(
+            "<<ListboxSelect>>", self.select_item
+        )
+
+        self.actions_frame = ttk.Frame(self)
+        self.actions_frame.pack(fill="x")
+
+        self.delete_button = ttk.Button(
+            self.actions_frame, 
+            text="Delete",
+            padding=10,
+            command=lambda: self.return_location("delete")
+        )
+        self.delete_button.grid(row=0, column=0)
+
+        self.save_button = ttk.Button(
+            self.actions_frame,
+            text="Save",
+            command=lambda: self.return_location("save")
+        )
+        self.save_button.grid(row=0, column=1)
+
+        self.cancel_button = ttk.Button(
+            self.actions_frame,
+            text="Cancel",
+            padding=10
+        )
+        self.cancel_button.grid(row=0, column=2)
+
+    def update_suggestions(self):
+        typed = self.entry.get().lower()
+
+        self.listbox.delete(0, tk.END)
+
+        if not typed:
+            return
+        
+        matches = []
+
+        for city in self.options:
+            full_name = f"{city['city']}, {city['country']}"
+            if typed in full_name.lower():
+                matches.append(full_name)
+        
+        if matches:
+            for match in matches:
+                self.listbox.insert(tk.END, match)
+        else:
+            self.listbox.insert(tk.END, "No city found")
+
+    def select_item(self):
+        selection = self.listbox.curselection()
+
+        if not selection:
+            return
+
+        value = self.listbox.get(selection[0])
+
+        if value == "No city found":
+            return
+        
+        self.entry.delete(0, tk.END)
+        self.entry.insert(0, value)
+
+        self.listbox.delete(0, tk.END)
+    
+    def validate_int(self, input):
+        try:
+            valid_int = int(input)
+        except:
+            return False
+        
+        if valid_int > 0:
+            return valid_int
+        else:
+            return False
+        
+    
+    def return_info(self, action, info):
+        validated_radius = self.validate_int(info[1])
+        
+        return info, action
+    
+class locationItem(ttk.Frame):
+    def __init__(self, parent, location="", radius=0):
+        super().__init__(parent)
+
+        self.location = location
+        self.radius = radius
+
+        self.location_label = ttk.Label(
+            self,
+            text=f"{self.location}",
+            padding=10
+        )
+        self.location_label.grid(row=0, column=0, sticky="e")
+
+        self.radius_label = ttk.Label(
+            self,
+            text=f"{self.radius}",
+            padding=10
+        )
+        self.radius_label.grid(row=1, column=0, sticky="e")
+    
+        self.edit_button = ttk.Button(
+            self,
+            text="Edit",
+            padding=10,
+            command=self.edit_location
+        )
+        self.edit_button.grid(row=0, column=2, rowspan=1, sticky="w")
+
+        self.select_button = ttk.Button(
+            self,
+            text="Select",
+            padding=10
+        )
+        self.select_button.grid(row=0, column=3, rowspan=1, sticky="w")
+    
+    def edit_location(self):
+        autocomplete = autocompleteEntry(options=CITIES, )
 
 class disasterApp:
     def __init__(self, root):
@@ -34,6 +191,10 @@ class disasterApp:
         
         self.last_all_refresh = \
             current_time.strftime("%Y-%m-%d %I:%M:%S %p")
+        
+        self.city_input = ""
+        self.country_input = ""
+        self.locations = {}
         
         self.create_frames()
         self.create_widgets()
@@ -537,6 +698,32 @@ class disasterApp:
         self.earthquake_frame.pack(fill="x", expand=True)
         self.back_home_button.grid(row=0, column=0, sticky="w")
         self.footer_frame.columnconfigure(0, weight=1)
+    
+    def get_coordinates(self):
+        geolocator = Nominatim(user_agent="my_geo_app")
+        address = f"{self.city_input}, {self.country_input}"
+
+        try:
+            location = geolocator.geocode(address)
+
+            if location:
+                return (location.latitude, location.longitude)
+            else:
+                return "Location Not Found"
+        except Exception as e:
+            messagebox.showerror("Location Error", f"Error: {e}")
+            return "Error"
+        
+    def show_location_menu(self):
+        self.location_popup_menu = tk.Toplevel(self.root)
+        self.location_popup_menu.title("Location Menu")
+        self.location_popup_menu.geometry("250x250+1000+0")
+
+        self.location_popup_list = ttk.Frame(
+            self.location_popup_menu,
+        )
+
+    
         
 root = tk.Tk()
 app = disasterApp(root)
