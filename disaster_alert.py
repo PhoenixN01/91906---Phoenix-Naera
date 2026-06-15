@@ -14,6 +14,8 @@ def load_cities():
     
 CITIES = load_cities()
 
+GEOLOCATOR = Nominatim(user_agent="my_geo_app")
+
 class statusIndicator(tk.Canvas):
     def __init__(self, parent):
         super().__init__(
@@ -33,26 +35,56 @@ class statusIndicator(tk.Canvas):
     def setColour(self, colour):
         self.itemconfig(self.light, fill=colour)
     
-class autocompleteEntry(ttk.Frame):
-    def __init__(self, parent, options, current_info):
-        super().__init__(parent)
+class locationEditFrame(ttk.Frame):
+    """Edit menu for editing location details.
 
-        self.options = options
+    This class is used to serve as a way to update and add details to
+    new or existing location items. This class is paired with a location
+    item class when created and draws information directly from its 
+    designated location, allowing edit menu's to isolate their specific
+    location for modification.
+    """
+    def __init__(self, frame, parent, locationItem, id):
+        super().__init__(frame)
+        self.options = CITIES
+        self.locationItem = locationItem
+        self.parent = parent
+        self.id = id
+        self.info = {
+            "location": self.parent.locations[id]["location"],
+            "radius": self.parent.locations[id]["radius"],
+            "coords": self.parent.locations[id]["coords"]
+        }
 
-        self.current_info = current_info
+        self.columnconfigure(1, weight=1)
+        self.rowconfigure(2, weight=1)
+        print("Edit Menu Placed")
 
+        self.create_widgets()
+    
+    def create_widgets(self):
+        self.location_label = ttk.Label(
+            self, 
+            text="Location: ", 
+            padding=10
+        )
+        self.location_label.grid(row=0, column=0, sticky="e")
         self.location_entry = ttk.Entry(self, width=30)
+        self.location_entry.insert(0, self.info["location"])
+        self.location_entry.grid(row=0, column=1)
+
+        self.radius_label = ttk.Label(
+            self, 
+            text="Radius(km): ",
+            padding=10
+        )
+        self.radius_label.grid(row=1, column=0, sticky="e")
         self.radius_entry = ttk.Entry(self, width=30)
-
-        if current_info:
-            self.location_entry.insert(0, self.current_info[0])
-            self.radius_entry.insert(0, self.current_info[1])
-
-        self.location_entry.pack(fill="x")
-        self.radius_entry.pack(fill="x")
+        self.radius_entry.insert(0, self.info["radius"])
+        self.radius_entry.grid(row=1, column=1)
 
         self.listbox = tk.Listbox(self, height=5)
-        self.listbox.pack(fill="x")
+        self.listbox.grid(row=2, column=0, columnspan=1)
 
         self.location_entry.bind(
             "<KeyRelease>", self.update_suggestions
@@ -62,32 +94,36 @@ class autocompleteEntry(ttk.Frame):
         )
 
         self.actions_frame = ttk.Frame(self)
-        self.actions_frame.pack(fill="x")
+        self.actions_frame.grid(row=3, column=0, columnspan=1)
 
-        self.delete_button = ttk.Button(
+        self.remove_button = ttk.Button(
             self.actions_frame, 
             text="Delete",
             padding=10,
-            command=lambda: self.return_location("delete")
+            command=self.remove_location
         )
-        self.delete_button.grid(row=0, column=0)
+        self.remove_button.grid(row=0, column=0)
 
         self.save_button = ttk.Button(
             self.actions_frame,
             text="Save",
-            command=lambda: self.return_location("save")
+            padding=10,
+            command=self.save_changes
         )
         self.save_button.grid(row=0, column=1)
 
         self.cancel_button = ttk.Button(
             self.actions_frame,
             text="Cancel",
-            padding=10
+            padding=10,
+            command=self.destroy
         )
         self.cancel_button.grid(row=0, column=2)
 
+        print("Widgets Created")
+
     def update_suggestions(self):
-        typed = self.entry.get().lower()
+        typed = self.location_entry.get().lower()
 
         self.listbox.delete(0, tk.END)
 
@@ -118,45 +154,132 @@ class autocompleteEntry(ttk.Frame):
         if value == "No city found":
             return
         
-        self.entry.delete(0, tk.END)
-        self.entry.insert(0, value)
+        self.location_entry.delete(0, tk.END)
+        self.location_entry.insert(0, value)
 
         self.listbox.delete(0, tk.END)
     
-    def validate_int(self, input):
+    def validate_radius(self):
         try:
-            valid_int = int(input)
-        except:
+            radius = int(self.info[1])
+            if radius > 0:
+                self.info[1] = radius
+                return True
+        except Exception as e:
+            messagebox.showerror("Error", f"Error: {e}")
             return False
         
-        if valid_int > 0:
-            return valid_int
-        else:
-            return False
-        
+        messagebox.showerror(
+            "Input Error", 
+            ("Radius Input Must be a " +
+            "Positive Integer Value to continue")
+        )
+        return False
     
-    def return_info(self, action, info):
-        validated_radius = self.validate_int(info[1])
+    def remove_location(self):
+        l = self.parent.locations[self.id]["location"]
+        ask_to_delete = messagebox.askyesno(
+            "Confirm Removal",
+            f"Are you sure you would like to remove location: {l}"
+        )
+
+        if not ask_to_delete:
+            return
         
-        return info, action
+        self.parent.locations.pop(
+            self.locationItem.id, None
+        )
+        messagebox.showinfo(
+            "Successfully Removed", 
+            f"Location: {l} removed successfully."
+        )
+        self.locationItem.destroy()
+        self.destroy()
+    
+    def save_changes(self):
+        if self.info["location"] == "" or\
+           self.info["location"] == "No city found":
+            messagebox.showerror(
+                "Input Error",
+                "A valid location is required to save changes"
+            )
+            return
+        
+        if self.info["radius"] == "":
+            messagebox.showerror(
+                "Input Error",
+                "A valid radius is required to save changes"
+            )
+            return
+        validated_location = self.get_coordinates()
+        validated_radius = self.validate_radius()
+
+        if not validated_radius or not validated_location:
+            return
+
+        self.parent.locations[self.id]["location"] = self.info[
+            "location"]
+        self.parent.locations[self.id]["radius"] = self.info["radius"]
+        self.parent.locations[self.id]["coords"] = self.info["coords"]
+        self.locationItem.location_label.config(
+            text=f"Location: {self.info[0]}"
+        )
+        self.locationItem.radius_label.config(
+            text=f"Radius: {self.info[1]}"
+        )
+
+        self.destroy()
+    
+    def get_coordinates(self):
+        address = self.location_entry.get()
+        if "," not in address:
+            messagebox.showerror(
+                "Format Error", 
+                "Locations must be written as: City, Country"
+            )
+            return False
+        
+        try:
+            location = GEOLOCATOR.geocode(address)
+
+            if location:
+                self.locationItem.coords = (
+                    location.latitude, 
+                    location.longitude
+                )
+                return True
+            else:
+                messagebox.showerror("Error", "Location Not Found")
+                return False
+        except Exception as e:
+            messagebox.showerror("Error", f"Error: {e}")
+            return False
+
     
 class locationItem(ttk.Frame):
-    def __init__(self, parent, location="", radius=0):
-        super().__init__(parent)
+    """Creates a location item
 
-        self.location = location
-        self.radius = radius
+    This class is responsible for housing a saved location within the
+    program, serving as a modular element that can be cloned and 
+    removed, retaining its own information for API access and window 
+    configuration.
+    """
+    def __init__(self, frame, parent, id):
+        super().__init__(frame)
+        self.frame = frame
+        self.parent = parent
+        self.id = id
 
         self.location_label = ttk.Label(
             self,
-            text=f"{self.location}",
+            text="",
             padding=10
         )
         self.location_label.grid(row=0, column=0, sticky="e")
 
         self.radius_label = ttk.Label(
             self,
-            text=f"{self.radius}",
+            text="",
             padding=10
         )
         self.radius_label.grid(row=1, column=0, sticky="e")
@@ -172,17 +295,51 @@ class locationItem(ttk.Frame):
         self.select_button = ttk.Button(
             self,
             text="Select",
-            padding=10
+            padding=10,
+            command=self.select_location
         )
         self.select_button.grid(row=0, column=3, rowspan=1, sticky="w")
-    
+
+        print("Location Item Created")
+
+        if not (self.parent.locations[id]["location"] or 
+                self.parent.locations[id]["radius"] or 
+                self.parent.locations[id]["coords"]):
+            self.edit_location()
+
     def edit_location(self):
-        autocomplete = autocompleteEntry(options=CITIES, )
+        self.edit_menu = locationEditFrame(
+            self.frame, 
+            self.parent, 
+            self,
+            self.id
+        )
+        self.edit_menu.lift()
+        self.edit_menu.place(relx=0.5, rely=0.5, anchor="center")
+    
+    def select_location(self):
+        self.parent.selected_location = self.id
+        self.select_button.config(text="(Active)")
+        self.select_button.state(["disabled"])
+        for location in self.parent.locations:
+            location["view"].deselect_location()
+  
+    def deselect_location(self):
+        self.select_button.config(text="Select")
+        self.select_button.state["Normal"]
+    
+    def refresh_display(self):
+        data = self.parent.locations[self.id]
+        self.location_label.config(
+            text=data["location"]
+        )
+        self.radius_label.config(
+            text=data["radius"]
+        )
 
 class disasterApp:
     def __init__(self, root):
         self.root = root
-        self.locations = []
         self.root.title("Local Disaster Alert System")
         self.root.minsize(496, 496)
         self.root.geometry("496x496+500+0")
@@ -192,9 +349,8 @@ class disasterApp:
         self.last_all_refresh = \
             current_time.strftime("%Y-%m-%d %I:%M:%S %p")
         
-        self.city_input = ""
-        self.country_input = ""
         self.locations = {}
+        self.nextid = 0
         
         self.create_frames()
         self.create_widgets()
@@ -327,6 +483,7 @@ class disasterApp:
         self.change_location_button = ttk.Button(
             self.location_frame,
             text="Change",
+            command=self.show_location_menu
         )
         self.change_location_button.grid(row=0, column=2, sticky="e")
         
@@ -721,6 +878,36 @@ class disasterApp:
 
         self.location_popup_list = ttk.Frame(
             self.location_popup_menu,
+            padding=10
+        )
+        self.location_popup_list.pack(fill="both", expand=True)
+
+        if self.locations:
+            for locationInfo in self.locations.values():
+                locationInfo["view"].pack()
+        
+        self.new_location_button = ttk.Button(
+            self.location_popup_menu,
+            text="New Location",
+            padding=10,
+            command=self.create_location
+        )
+        self.new_location_button.pack(side="bottom")
+    
+    def create_location(self):
+        id = self.nextid
+        self.nextid += 1
+        self.locations[id] = {
+            "location": "",
+            "radius": "",
+            "coords": "",
+            "view": ""
+        }
+
+        self.locations[id]["view"] = locationItem(
+            self.location_popup_list, 
+            self, 
+            id
         )
 
     
