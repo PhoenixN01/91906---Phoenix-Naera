@@ -7,10 +7,21 @@ import json
 import os
 
 CITIES_FILE = "cities.json"
+LOCATIONS_FILE = "stored_locations.json"
+SYSTEM_FILE = "menu_history.json"
+
+if not os.path.exists(LOCATIONS_FILE):
+    with open(LOCATIONS_FILE, 'w') as locf:
+        json.dump({}, locf, indent=4)
+
+
+if not os.path.exists(SYSTEM_FILE):
+    with open(SYSTEM_FILE, 'w') as sysf:
+        json.dump({}, sysf, indent=4)
 
 def load_cities():
-    with open(CITIES_FILE, "r") as f:
-        return json.load(f)
+    with open(CITIES_FILE, "r") as ctyf:
+        return json.load(ctyf)
     
 CITIES = load_cities()
 
@@ -22,9 +33,12 @@ class statusIndicator(tk.Canvas):
             parent,
             width=14,
             height=14,
-            highlightthickness=0
+            highlightthickness=0,
+            bd=0,
+            relief="flat",
+            bg="#DCDAD5"
         )
- 
+
         self.light = self.create_oval(
             2, 2,
             12, 12,
@@ -44,47 +58,48 @@ class locationEditFrame(ttk.Frame):
     designated location, allowing edit menu's to isolate their specific
     location for modification.
     """
-    def __init__(self, frame, parent, locationItem, id):
+    def __init__(self, frame, parent, locationItem, id, locationExists):
         super().__init__(frame)
         self.options = CITIES
         self.locationItem = locationItem
         self.parent = parent
         self.id = id
+        self.location_exists = locationExists
         self.info = {
             "location": self.parent.locations[id]["location"],
             "radius": self.parent.locations[id]["radius"],
             "coords": self.parent.locations[id]["coords"]
         }
 
-        self.columnconfigure(1, weight=1)
-        self.rowconfigure(2, weight=1)
-        print("Edit Menu Placed")
-
-        self.create_widgets()
+        self.create_display()
     
-    def create_widgets(self):
+    def create_display(self):
+        self.input_frame = ttk.Frame(self, padding=10)
+        self.input_frame.pack()
+        self.input_frame.columnconfigure(1, weight=1)
+
         self.location_label = ttk.Label(
-            self, 
+            self.input_frame, 
             text="Location: ", 
             padding=10
         )
         self.location_label.grid(row=0, column=0, sticky="e")
-        self.location_entry = ttk.Entry(self, width=30)
+        self.location_entry = ttk.Entry(self.input_frame, width=30)
         self.location_entry.insert(0, self.info["location"])
         self.location_entry.grid(row=0, column=1)
 
         self.radius_label = ttk.Label(
-            self, 
+            self.input_frame, 
             text="Radius(km): ",
             padding=10
         )
         self.radius_label.grid(row=1, column=0, sticky="e")
-        self.radius_entry = ttk.Entry(self, width=30)
+        self.radius_entry = ttk.Entry(self.input_frame, width=30)
         self.radius_entry.insert(0, self.info["radius"])
         self.radius_entry.grid(row=1, column=1)
 
-        self.listbox = tk.Listbox(self, height=5)
-        self.listbox.grid(row=2, column=0, columnspan=1)
+        self.listbox = tk.Listbox(self)
+        self.listbox.pack(fill="both", expand=True)
 
         self.location_entry.bind(
             "<KeyRelease>", self.update_suggestions
@@ -94,35 +109,33 @@ class locationEditFrame(ttk.Frame):
         )
 
         self.actions_frame = ttk.Frame(self)
-        self.actions_frame.grid(row=3, column=0, columnspan=1)
+        self.actions_frame.pack()
 
-        self.remove_button = ttk.Button(
-            self.actions_frame, 
-            text="Delete",
-            padding=10,
-            command=self.remove_location
-        )
-        self.remove_button.grid(row=0, column=0)
+        if self.location_exists:
+            self.remove_button = ttk.Button(
+                self.actions_frame, 
+                text="Remove",
+                width=8,
+                command=self.remove_location
+            )
+            self.remove_button.grid(row=0, column=0, padx=5)
 
         self.save_button = ttk.Button(
             self.actions_frame,
             text="Save",
-            padding=10,
+            width=8,
             command=self.save_changes
         )
-        self.save_button.grid(row=0, column=1)
-
+        self.save_button.grid(row=0, column=1, padx=5)
         self.cancel_button = ttk.Button(
             self.actions_frame,
             text="Cancel",
-            padding=10,
-            command=self.destroy
+            width=8,
+            command=self.cancel_changes
         )
-        self.cancel_button.grid(row=0, column=2)
+        self.cancel_button.grid(row=0, column=2, padx=5)
 
-        print("Widgets Created")
-
-    def update_suggestions(self):
+    def update_suggestions(self, event):
         typed = self.location_entry.get().lower()
 
         self.listbox.delete(0, tk.END)
@@ -143,7 +156,7 @@ class locationEditFrame(ttk.Frame):
         else:
             self.listbox.insert(tk.END, "No city found")
 
-    def select_item(self):
+    def select_item(self, event):
         selection = self.listbox.curselection()
 
         if not selection:
@@ -161,9 +174,9 @@ class locationEditFrame(ttk.Frame):
     
     def validate_radius(self):
         try:
-            radius = int(self.info[1])
+            radius = int(self.info["radius"])
             if radius > 0:
-                self.info[1] = radius
+                self.info["radius"] = radius
                 return True
         except Exception as e:
             messagebox.showerror("Error", f"Error: {e}")
@@ -186,17 +199,23 @@ class locationEditFrame(ttk.Frame):
         if not ask_to_delete:
             return
         
+        if self.parent.selected_location == self.locationItem.id:
+            self.parent.update_display(False)
+
         self.parent.locations.pop(
             self.locationItem.id, None
         )
+        self.locationItem.destroy()
         messagebox.showinfo(
             "Successfully Removed", 
             f"Location: {l} removed successfully."
         )
-        self.locationItem.destroy()
         self.destroy()
     
     def save_changes(self):
+        self.info["location"] = self.location_entry.get().strip()
+        self.info["radius"] = self.radius_entry.get().strip()
+
         if self.info["location"] == "" or\
            self.info["location"] == "No city found":
             messagebox.showerror(
@@ -222,13 +241,22 @@ class locationEditFrame(ttk.Frame):
         self.parent.locations[self.id]["radius"] = self.info["radius"]
         self.parent.locations[self.id]["coords"] = self.info["coords"]
         self.locationItem.location_label.config(
-            text=f"Location: {self.info[0]}"
+            text=self.info["location"]
         )
         self.locationItem.radius_label.config(
-            text=f"Radius: {self.info[1]}"
+            text=f"Radius: {self.info["radius"]}km"
         )
-
         self.destroy()
+    
+    def cancel_changes(self):
+        if self.location_exists:
+            self.destroy()
+        else:
+            self.parent.locations.pop(
+                self.locationItem.id, None
+            )
+            self.locationItem.destroy()
+            self.destroy()
     
     def get_coordinates(self):
         address = self.location_entry.get()
@@ -243,7 +271,7 @@ class locationEditFrame(ttk.Frame):
             location = GEOLOCATOR.geocode(address)
 
             if location:
-                self.locationItem.coords = (
+                self.info["coords"] = (
                     location.latitude, 
                     location.longitude
                 )
@@ -255,7 +283,7 @@ class locationEditFrame(ttk.Frame):
             messagebox.showerror("Error", f"Error: {e}")
             return False
 
-    
+
 class locationItem(ttk.Frame):
     """Creates a location item
 
@@ -266,75 +294,89 @@ class locationItem(ttk.Frame):
     """
     def __init__(self, frame, parent, id):
         super().__init__(frame)
-        self.frame = frame
         self.parent = parent
         self.id = id
 
+        self.pack(fill="x", expand=False)
+        self.columnconfigure(0, weight=1)
+
+        self.info_frame = ttk.Frame(self, padding=10)
+        self.info_frame.grid(row=0, column=0, sticky="w")
+
         self.location_label = ttk.Label(
-            self,
-            text="",
-            padding=10
+            self.info_frame,
+            text=""
         )
-        self.location_label.grid(row=0, column=0, sticky="e")
+        self.location_label.grid(row=0, column=0, sticky="w")
 
         self.radius_label = ttk.Label(
-            self,
-            text="",
-            padding=10
+            self.info_frame,
+            text=""
         )
-        self.radius_label.grid(row=1, column=0, sticky="e")
+        self.radius_label.grid(row=1, column=0, sticky="w")
     
         self.edit_button = ttk.Button(
             self,
             text="Edit",
-            padding=10,
-            command=self.edit_location
+            width=4,
+            command=lambda: self.edit_location(True)
         )
-        self.edit_button.grid(row=0, column=2, rowspan=1, sticky="w")
+        self.edit_button.grid(row=0, column=1, sticky="e")
 
         self.select_button = ttk.Button(
             self,
             text="Select",
-            padding=10,
+            width=6,
             command=self.select_location
         )
-        self.select_button.grid(row=0, column=3, rowspan=1, sticky="w")
-
-        print("Location Item Created")
+        self.select_button.grid(row=0, column=2, sticky="e", padx=5)
 
         if not (self.parent.locations[id]["location"] or 
                 self.parent.locations[id]["radius"] or 
                 self.parent.locations[id]["coords"]):
-            self.edit_location()
+            self.edit_location(False)
+    
+    def display_self(self):
+        self.pack(fill="x", expand=False)
 
-    def edit_location(self):
+    def edit_location(self, locationExists):
         self.edit_menu = locationEditFrame(
-            self.frame, 
+            self.parent.location_popup_menu, 
             self.parent, 
             self,
-            self.id
+            self.id,
+            locationExists
         )
         self.edit_menu.lift()
-        self.edit_menu.place(relx=0.5, rely=0.5, anchor="center")
+        self.edit_menu.place(
+            relx=0.5, 
+            rely=0.5, 
+            relheight=1, 
+            relwidth=1, 
+            anchor="center"
+        )
     
     def select_location(self):
-        self.parent.selected_location = self.id
         self.select_button.config(text="(Active)")
         self.select_button.state(["disabled"])
-        for location in self.parent.locations:
-            location["view"].deselect_location()
+        self.parent.selected_location = self.id
+        self.parent.update_display()
+
+        for location in self.parent.locations.values():
+            if not location["view"] == self:
+                location["view"].deselect_location()
   
     def deselect_location(self):
         self.select_button.config(text="Select")
-        self.select_button.state["Normal"]
+        self.select_button.state(["!disabled"])
     
-    def refresh_display(self):
+    def refresh_location(self):
         data = self.parent.locations[self.id]
         self.location_label.config(
             text=data["location"]
         )
         self.radius_label.config(
-            text=data["radius"]
+            text=f"Radius: {data["location"]}km"
         )
 
 class disasterApp:
@@ -344,16 +386,33 @@ class disasterApp:
         self.root.minsize(496, 496)
         self.root.geometry("496x496+500+0")
 
+        self.style = ttk.Style()
+        self.style.theme_use("clam")
+
         current_time = datetime.now()
         
         self.last_all_refresh = \
             current_time.strftime("%Y-%m-%d %I:%M:%S %p")
         
         self.locations = {}
+        self.selected_location = 0
         self.nextid = 0
         
         self.create_frames()
         self.create_widgets()
+        self.create_location_menu()
+
+    def create_styles(self):
+        self.style.configure(
+            "Location.TLabel",
+            font=("Inter", "Segoe UI", "Helvetica", "Arial", "sans-serif", 24)
+        )
+
+        self.style.configure(
+            "Radius.TLabel",
+            font=("Inter", "Segoe UI", "Helvetica", "Arial", "sans-serif", 16)
+        )
+
     
     def create_frames(self):
         """Creates the layout structure of the GUI
@@ -369,10 +428,7 @@ class disasterApp:
         self.location_frame = ttk.Frame(self.main_frame, padding=10)
 
         self.all_status_frame = ttk.Frame(self.main_frame, padding=10)
-        self.footer_frame = ttk.Frame(self.main_frame, padding=10)
-        self.footer_frame.columnconfigure(0, weight=0)
-        self.footer_frame.columnconfigure(1, weight=1)
-        self.footer_frame.columnconfigure(2, weight=1)
+        self.footer_frame = ttk.Frame(self.main_frame)
 
         # All frames for Weather-specific window
         self.weather_frame = ttk.Frame(self.main_frame)
@@ -455,7 +511,11 @@ class disasterApp:
         # self.weather_frame.pack(fill="x", expand=True)
         # self.flood_frame.pack(fill="x", expand=True)
         # self.earthquake_frame.pack(fill="x", expand=True)
-        self.footer_frame.pack(side=tk.BOTTOM, fill="x", expand=False)
+        self.footer_frame.pack(
+            side=tk.BOTTOM, 
+            fill="both", 
+            expand=True,
+        )
     
     def create_widgets(self):
         """Creates the widgets for the GUI
@@ -475,8 +535,9 @@ class disasterApp:
         # Current Location Display
         self.current_location_label = ttk.Label(
             self.location_frame,
-            text="Current Location: ____, ______",
-            padding=(10, 0)
+            text="Current Location: Not Selected",
+            padding=(10, 0),
+            style="Location.TLabel"
         )
         self.current_location_label.grid(row=0, column=0)
 
@@ -489,8 +550,9 @@ class disasterApp:
         
         self.search_radius_label = ttk.Label(
             self.location_frame,
-            text="Radius: _km",
-            padding=(10, 0)
+            text="Radius: Not Selected",
+            padding=(10, 0),
+            style="Radius.TLabel"
         )
         self.search_radius_label.grid(row=1, column=0, sticky="w")
 
@@ -504,7 +566,7 @@ class disasterApp:
         # Row 1: Weather Status
         self.all_status_row1 = ttk.Frame(
             self.all_status_frame,
-            padding=(10,2.5)
+            padding=(10, 2.5)
         )
         self.all_status_row1.pack(fill="x", expand=True)
         self.all_status_row1.grid_columnconfigure(2, weight=1)
@@ -529,7 +591,7 @@ class disasterApp:
         self.all_status_w_button = ttk.Button(
             self.all_status_row1,
             text="View Weather Details",
-            padding=10,
+            width=16,
             command=self.show_weather_display
         )
         self.all_status_w_button.grid(row=0, column=3, sticky="e")
@@ -537,7 +599,7 @@ class disasterApp:
         # Row 2: Flood Status
         self.all_status_row2 = ttk.Frame(
             self.all_status_frame,
-            padding=(10,2.5)
+            padding=(10, 2.5)
         )
         self.all_status_row2.pack(fill="x", expand=True)
         self.all_status_row2.grid_columnconfigure(2, weight=1)
@@ -562,7 +624,7 @@ class disasterApp:
         self.all_status_f_button = ttk.Button(
             self.all_status_row2,
             text="View Flood Alerts",
-            padding=10,
+            width=16,
             command=self.show_flood_display
         )
         self.all_status_f_button.grid(row=0, column=3, sticky="e")
@@ -570,7 +632,7 @@ class disasterApp:
         # Row 3: Earthquake Status
         self.all_status_row3 = ttk.Frame(
             self.all_status_frame,
-            padding=(10,2.5)
+            padding=(10, 2.5)
         )
         self.all_status_row3.pack(fill="x", expand=True)
         self.all_status_row3.grid_columnconfigure(2, weight=1)
@@ -595,7 +657,7 @@ class disasterApp:
         self.all_status_q_button = ttk.Button(
             self.all_status_row3,
             text="View Earthquake Alerts",
-            padding=10,
+            width=16,
             command=self.show_earthquake_display
         )
         self.all_status_q_button.grid(row=0, column=3, sticky="e")
@@ -606,8 +668,6 @@ class disasterApp:
             padding=5,
             command=self.show_home_display
         )
-        self.back_home_button.grid(row=0, column=0, sticky="w")
-        self.back_home_button.state(['disabled'])
 
         # Footer Buttons
         self.all_sync_button = ttk.Button(
@@ -615,7 +675,7 @@ class disasterApp:
             text="Sync from Servers", 
             padding=5
         )
-        self.all_sync_button.grid(row=0, column=1, sticky="s")
+        self.all_sync_button.place(relx=0.5, rely=0.5, anchor="center")
 
 
         # ---- Weather Specific Window ----
@@ -829,62 +889,50 @@ class disasterApp:
         self.weather_frame.pack_forget()
         self.flood_frame.pack_forget()
         self.earthquake_frame.pack_forget()
-        self.back_home_button.grid_forget()
-        self.footer_frame.columnconfigure(0, weight=0)
+        self.back_home_button.pack_forget()
     
     def show_weather_display(self):
         self.all_status_frame.pack_forget()
         self.weather_frame.pack(fill="x", expand=True)
         self.flood_frame.pack_forget()
         self.earthquake_frame.pack_forget()
-        self.back_home_button.grid(row=0, column=0, sticky="w")
-        self.footer_frame.columnconfigure(0, weight=1)
+        self.back_home_button.pack(side="left")
 
     def show_flood_display(self):
         self.all_status_frame.pack_forget()
         self.weather_frame.pack_forget()
         self.flood_frame.pack(fill="x", expand=True)
         self.earthquake_frame.pack_forget()
-        self.back_home_button.grid(row=0, column=0, sticky="w")
-        self.footer_frame.columnconfigure(0, weight=1)
+        self.back_home_button.pack(side="left")
     
     def show_earthquake_display(self):
         self.all_status_frame.pack_forget()
         self.weather_frame.pack_forget()
         self.flood_frame.pack_forget()
         self.earthquake_frame.pack(fill="x", expand=True)
-        self.back_home_button.grid(row=0, column=0, sticky="w")
-        self.footer_frame.columnconfigure(0, weight=1)
+        self.back_home_button.pack(side="left")
     
-    def get_coordinates(self):
-        geolocator = Nominatim(user_agent="my_geo_app")
-        address = f"{self.city_input}, {self.country_input}"
-
-        try:
-            location = geolocator.geocode(address)
-
-            if location:
-                return (location.latitude, location.longitude)
-            else:
-                return "Location Not Found"
-        except Exception as e:
-            messagebox.showerror("Location Error", f"Error: {e}")
-            return "Error"
-        
-    def show_location_menu(self):
-        self.location_popup_menu = tk.Toplevel(self.root)
-        self.location_popup_menu.title("Location Menu")
-        self.location_popup_menu.geometry("250x250+1000+0")
+    def create_location_menu(self):
+        self.location_popup_menu = ttk.Frame(
+            self.root,
+            borderwidth=3,
+            relief="groove"
+        )
 
         self.location_popup_list = ttk.Frame(
             self.location_popup_menu,
             padding=10
         )
         self.location_popup_list.pack(fill="both", expand=True)
-
-        if self.locations:
-            for locationInfo in self.locations.values():
-                locationInfo["view"].pack()
+        self.location_popup_list.propagate(False)
+                
+        self.close_location_menu_button = ttk.Button(
+            self.location_popup_menu,
+            text="Close",
+            padding=(0, 10),
+            command=self.location_popup_menu.place_forget
+        )
+        self.close_location_menu_button.pack(side="left", padx=5)
         
         self.new_location_button = ttk.Button(
             self.location_popup_menu,
@@ -892,7 +940,22 @@ class disasterApp:
             padding=10,
             command=self.create_location
         )
-        self.new_location_button.pack(side="bottom")
+        self.new_location_button.place(relx=0.5, rely=1, anchor="s")
+        
+    def show_location_menu(self):
+        if self.locations:
+            for locationInfo in self.locations.values():
+                locationInfo["view"].display_self()
+                print(f"{locationInfo["location"]} Shown")
+            print(self.locations)
+        
+        self.location_popup_menu.place(
+            relx=0.5, 
+            rely=0.5, 
+            anchor="center",
+            relheight=0.9,
+            relwidth=0.9
+        )
     
     def create_location(self):
         id = self.nextid
@@ -909,9 +972,27 @@ class disasterApp:
             self, 
             id
         )
-
     
-        
+    def update_display(self, location=True):
+        if location:
+            location_info = self.locations[self.selected_location]
+
+            self.current_location_label.config(
+                text=f"Current Location: {location_info["location"]}" 
+            )
+
+            self.search_radius_label.config(
+                text=f"Radius: {location_info["radius"]}km"
+            )
+        else:
+            self.current_location_label.config(
+                text="Current Location: Not Selected" 
+            )
+
+            self.search_radius_label.config(
+                text=f"Radius: Not Selected"
+            )
+
 root = tk.Tk()
 app = disasterApp(root)
 root.mainloop()
