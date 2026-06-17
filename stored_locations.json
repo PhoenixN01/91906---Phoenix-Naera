@@ -1,9 +1,18 @@
 {
     "0": {
-        "location": "Queenstown-Lakes District, New Zealand",
-        "radius": 3,
+        "location": "Auckland, New Zealand",
+        "radius": 5,
         "coords": [
-            -44.6615078,
-            168.7741626
-        ],
-        "view": 
+            -36.852095,
+            174.7631803
+        ]
+    },
+    "1": {
+        "location": "Akl, NZ",
+        "radius": 5,
+        "coords": [
+            -36.852095,
+            174.7631803
+        ]
+    }
+}

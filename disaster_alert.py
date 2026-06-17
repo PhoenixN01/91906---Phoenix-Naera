@@ -213,10 +213,9 @@ class locationEditFrame(ttk.Frame):
         if self.parent.selected_location == self.locationItem.id:
             self.parent.update_display(False)
 
-        self.parent.locations.pop(
-            self.locationItem.id, None
-        )
+        self.parent.locations.pop(self.locationItem.id, None)
         self.parent.update_local_storage()
+        self.parent.location_items.pop(self.locationItem.id, None)
         self.locationItem.destroy()
         messagebox.showinfo(
             "Successfully Removed", 
@@ -259,6 +258,7 @@ class locationEditFrame(ttk.Frame):
             text=f"Radius: {self.info["radius"]}km"
         )
         self.parent.update_local_storage()
+        print(self.info)
         self.destroy()
     
     def cancel_changes(self):
@@ -316,15 +316,19 @@ class locationItem(ttk.Frame):
         self.info_frame = ttk.Frame(self, padding=10)
         self.info_frame.grid(row=0, column=0, sticky="w")
 
+        # Reinstate previous save data if created from existing 
+        # location stored in local storage
+        previous_info = parent.locations[id]
+
         self.location_label = ttk.Label(
             self.info_frame,
-            text=""
+            text=previous_info["location"]
         )
         self.location_label.grid(row=0, column=0, sticky="w")
 
         self.radius_label = ttk.Label(
             self.info_frame,
-            text=""
+            text=f"Radius: {previous_info["radius"]}km"
         )
         self.radius_label.grid(row=1, column=0, sticky="w")
     
@@ -375,9 +379,9 @@ class locationItem(ttk.Frame):
         self.parent.selected_location = self.id
         self.parent.update_display()
 
-        for location in self.parent.locations.values():
-            if not location["view"] == self:
-                location["view"].deselect_location()
+        for location in self.parent.location_items.values():
+            if not location == self:
+                location.deselect_location()
   
     def deselect_location(self):
         self.select_button.config(text="Select")
@@ -409,8 +413,12 @@ class disasterApp:
             current_time.strftime("%Y-%m-%d %I:%M %p")
         
         self.locations = location_data
+        self.location_items = {}
         self.selected_location = 0
-        self.nextid = 0
+        if location_data:
+            self.nextid = list(location_data)[-1]
+        else:
+            self.nextid = 0
         
         self.create_styles()
         self.create_frames()
@@ -1041,8 +1049,17 @@ class disasterApp:
         
     def show_location_menu(self):
         if self.locations:
-            for locationInfo in self.locations.values():
-                locationInfo["view"].display_self()
+            if self.location_items:
+                print(self.location_items)
+                for location in self.location_items.values():
+                    location.display_self()
+            else:
+                for id in self.locations.keys():
+                    self.location_items[id] = locationItem(
+                        self.location_popup_list,
+                        self,
+                        id
+                    )
         
         self.location_popup_menu.place(
             relx=0.5, 
@@ -1058,11 +1075,10 @@ class disasterApp:
         self.locations[id] = {
             "location": "",
             "radius": "",
-            "coords": "",
-            "view": ""
+            "coords": ""
         }
 
-        self.locations[id]["view"] = locationItem(
+        self.location_items[id] = locationItem(
             self.location_popup_list, 
             self, 
             id
@@ -1092,7 +1108,6 @@ class disasterApp:
     def update_local_storage(self):
         with open(LOCATIONS_FILE, 'w') as locf:
             locf = json.dump(self.locations, locf, indent=4)
-            print(locf)
 
 root = tk.Tk()
 app = disasterApp(
