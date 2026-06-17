@@ -13,11 +13,22 @@ SYSTEM_FILE = "menu_history.json"
 if not os.path.exists(LOCATIONS_FILE):
     with open(LOCATIONS_FILE, 'w') as locf:
         json.dump({}, locf, indent=4)
-
+else:
+    try:
+        with open(LOCATIONS_FILE, 'r') as locf:
+            location_data = json.load(locf)
+    except (json.JSONDecodeError, OSError):
+        location_data = {}
 
 if not os.path.exists(SYSTEM_FILE):
     with open(SYSTEM_FILE, 'w') as sysf:
         json.dump({}, sysf, indent=4)
+else:
+    try:
+        with open(SYSTEM_FILE, 'r') as sysf:
+            system_data = json.load(sysf)
+    except (json.JSONDecodeError, OSError):
+        system_data = {}
 
 def load_cities():
     with open(CITIES_FILE, "r") as ctyf:
@@ -28,7 +39,7 @@ CITIES = load_cities()
 GEOLOCATOR = Nominatim(user_agent="my_geo_app")
 
 class statusIndicator(tk.Canvas):
-    def __init__(self, parent):
+    def __init__(self, parent, bg_colour):
         super().__init__(
             parent,
             width=14,
@@ -36,7 +47,7 @@ class statusIndicator(tk.Canvas):
             highlightthickness=0,
             bd=0,
             relief="flat",
-            bg="#DCDAD5"
+            bg=bg_colour
         )
 
         self.light = self.create_oval(
@@ -205,6 +216,7 @@ class locationEditFrame(ttk.Frame):
         self.parent.locations.pop(
             self.locationItem.id, None
         )
+        self.parent.update_local_storage()
         self.locationItem.destroy()
         messagebox.showinfo(
             "Successfully Removed", 
@@ -246,6 +258,7 @@ class locationEditFrame(ttk.Frame):
         self.locationItem.radius_label.config(
             text=f"Radius: {self.info["radius"]}km"
         )
+        self.parent.update_local_storage()
         self.destroy()
     
     def cancel_changes(self):
@@ -380,37 +393,72 @@ class locationItem(ttk.Frame):
         )
 
 class disasterApp:
-    def __init__(self, root):
+    def __init__(self, root, location_data, system_data):
         self.root = root
         self.root.title("Local Disaster Alert System")
         self.root.minsize(496, 496)
-        self.root.geometry("496x496+500+0")
+        self.root.geometry("600x500+500+0")
 
         self.style = ttk.Style()
         self.style.theme_use("clam")
+        self.root.configure(bg="#F0F0F0")
 
         current_time = datetime.now()
         
         self.last_all_refresh = \
-            current_time.strftime("%Y-%m-%d %I:%M:%S %p")
+            current_time.strftime("%Y-%m-%d %I:%M %p")
         
-        self.locations = {}
+        self.locations = location_data
         self.selected_location = 0
         self.nextid = 0
         
+        self.create_styles()
         self.create_frames()
         self.create_widgets()
         self.create_location_menu()
 
     def create_styles(self):
         self.style.configure(
-            "Location.TLabel",
-            font=("Inter", "Segoe UI", "Helvetica", "Arial", "sans-serif", 24)
+            "MainBG.TFrame",
+            background="#F0F0F0"
         )
-
+        self.style.configure(
+            "InfoBG.TFrame",
+            background="#D9D9D9"
+        )
+        self.style.configure(
+            "LastRefresh.TLabel",
+            background="#F0F0F0",
+            foreground="#575757"
+        )
+        self.style.configure(
+            "Location.TLabel",
+            font=("TkDefaultFont", 18),
+            background="#F0F0F0"
+        )
         self.style.configure(
             "Radius.TLabel",
-            font=("Inter", "Segoe UI", "Helvetica", "Arial", "sans-serif", 16)
+            font=("TkDefaultFont", 10),
+            background="#F0F0F0"
+        )
+        self.style.configure(
+            "MainBG.TButton",
+            background="#D9D9D9",
+            relief="flat",
+            borderwidth=0
+        )
+        self.style.configure(
+            "MainStatus.TLabel",
+            font=("TkDefaultFont", 28)
+        )
+        self.style.configure(
+            "AllStatusBG.TFrame",
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "AllStatusText.TLabel",
+            font=("TkDefaultFont", 20),
+            background="#FFFFFF"
         )
 
     
@@ -422,13 +470,27 @@ class disasterApp:
         consisten and separate from the widgets (elements) of the GUI
         """
         
-        self.main_frame = ttk.Frame(self.root)
+        self.main_frame = ttk.Frame(self.root, style="MainBG.TFrame")
 
-        self.refresh_frame = ttk.Frame(self.main_frame)
-        self.location_frame = ttk.Frame(self.main_frame, padding=10)
+        self.refresh_frame = ttk.Frame(
+            self.main_frame, 
+            style="MainBG.TFrame"
+        )
+        self.location_frame = ttk.Frame(
+            self.main_frame, 
+            padding=10,
+            style="MainBG.TFrame"
+        )
 
-        self.all_status_frame = ttk.Frame(self.main_frame, padding=10)
-        self.footer_frame = ttk.Frame(self.main_frame)
+        self.all_status_frame = ttk.Frame(
+            self.main_frame, 
+            padding=10,
+            style="InfoBG.TFrame"
+        )
+        self.footer_frame = ttk.Frame(
+            self.main_frame, 
+            style="MainBG.TFrame"
+        )
 
         # All frames for Weather-specific window
         self.weather_frame = ttk.Frame(self.main_frame)
@@ -505,12 +567,9 @@ class disasterApp:
         
         self.main_frame.pack(fill="both", expand=True)
         self.refresh_frame.pack(fill="x")
-        self.location_frame.pack(fill="x", expand=True)
+        self.location_frame.pack(fill="x", expand=False)
         self.location_frame.grid_columnconfigure(1, weight=1)
         self.all_status_frame.pack(fill="x", expand=True)
-        # self.weather_frame.pack(fill="x", expand=True)
-        # self.flood_frame.pack(fill="x", expand=True)
-        # self.earthquake_frame.pack(fill="x", expand=True)
         self.footer_frame.pack(
             side=tk.BOTTOM, 
             fill="both", 
@@ -528,7 +587,7 @@ class disasterApp:
         self.last_refresh_label = ttk.Label(
             self.refresh_frame, 
             text=f"Last refreshed at:    {self.last_all_refresh}",
-            padding=10
+            style="LastRefresh.TLabel"
             )
         self.last_refresh_label.pack(side="top")
 
@@ -544,6 +603,8 @@ class disasterApp:
         self.change_location_button = ttk.Button(
             self.location_frame,
             text="Change",
+            width=8,
+            style="MainBG.TButton",
             command=self.show_location_menu
         )
         self.change_location_button.grid(row=0, column=2, sticky="e")
@@ -559,20 +620,24 @@ class disasterApp:
         # Main Status Display (home screen)
         self.all_status_title = ttk.Label(
             self.all_status_frame,
-            text="Status",
-            padding=10
+            text="Status Monitoring",
+            padding=5,
+            style="MainStatus.TLabel"
         )
+        self.all_status_title.pack()
 
         # Row 1: Weather Status
         self.all_status_row1 = ttk.Frame(
             self.all_status_frame,
-            padding=(10, 2.5)
+            padding=2.5,
+            style="AllStatusBG.TFrame"
         )
-        self.all_status_row1.pack(fill="x", expand=True)
+        self.all_status_row1.pack(fill="x", expand=True, pady=2.5)
         self.all_status_row1.grid_columnconfigure(2, weight=1)
 
         self.all_status_w_indicator = statusIndicator(
-            self.all_status_row1
+            self.all_status_row1,
+            "#FFFFFF"
         )
         self.all_status_w_indicator.grid(
             row=0, 
@@ -584,28 +649,38 @@ class disasterApp:
         self.all_status_w_label = ttk.Label(
             self.all_status_row1,
             text="Weather: Normal",
-            padding=10
+            padding=10,
+            style="AllStatusText.TLabel"
         )
         self.all_status_w_label.grid(row=0, column=1)
         
         self.all_status_w_button = ttk.Button(
             self.all_status_row1,
             text="View Weather Details",
-            width=16,
+            width=17,
+            padding=(0, 6),
+            style="MainBG.TButton",
             command=self.show_weather_display
         )
-        self.all_status_w_button.grid(row=0, column=3, sticky="e")
+        self.all_status_w_button.grid(
+            row=0, 
+            column=3, 
+            sticky="e", 
+            padx=8
+        )
 
         # Row 2: Flood Status
         self.all_status_row2 = ttk.Frame(
             self.all_status_frame,
-            padding=(10, 2.5)
+            padding=2.5,
+            style="AllStatusBG.TFrame"
         )
-        self.all_status_row2.pack(fill="x", expand=True)
+        self.all_status_row2.pack(fill="x", expand=True, pady=2.5)
         self.all_status_row2.grid_columnconfigure(2, weight=1)
 
         self.all_status_f_indicator = statusIndicator(
-            self.all_status_row2
+            self.all_status_row2,
+            "#FFFFFF"
         )
         self.all_status_f_indicator.grid(
             row=0, 
@@ -617,28 +692,38 @@ class disasterApp:
         self.all_status_f_label = ttk.Label(
             self.all_status_row2,
             text="Flood Risk: Low",
-            padding=10
+            padding=10,
+            style="AllStatusText.TLabel"
         )
         self.all_status_f_label.grid(row=0, column=1)
 
         self.all_status_f_button = ttk.Button(
             self.all_status_row2,
             text="View Flood Alerts",
-            width=16,
+            width=17,
+            padding=(0, 6),
+            style="MainBG.TButton",
             command=self.show_flood_display
         )
-        self.all_status_f_button.grid(row=0, column=3, sticky="e")
+        self.all_status_f_button.grid(
+            row=0, 
+            column=3, 
+            sticky="e", 
+            padx=8
+        )
 
         # Row 3: Earthquake Status
         self.all_status_row3 = ttk.Frame(
             self.all_status_frame,
-            padding=(10, 2.5)
+            padding=2.5,
+            style="AllStatusBG.TFrame"
         )
-        self.all_status_row3.pack(fill="x", expand=True)
+        self.all_status_row3.pack(fill="x", expand=True, pady=2.5)
         self.all_status_row3.grid_columnconfigure(2, weight=1)
 
         self.all_status_q_indicator = statusIndicator(
-            self.all_status_row3
+            self.all_status_row3,
+            "#FFFFFF"
         )
         self.all_status_q_indicator.grid(
             row=0, 
@@ -650,18 +735,27 @@ class disasterApp:
         self.all_status_q_label = ttk.Label(
             self.all_status_row3,
             text="Earthquake Alert: Low",
-            padding=10
+            padding=10,
+            style="AllStatusText.TLabel"
         )
         self.all_status_q_label.grid(row=0, column=1)
 
         self.all_status_q_button = ttk.Button(
             self.all_status_row3,
             text="View Earthquake Alerts",
-            width=16,
+            width=17,
+            padding=(0, 6),
+            style="MainBG.TButton",
             command=self.show_earthquake_display
         )
-        self.all_status_q_button.grid(row=0, column=3, sticky="e")
+        self.all_status_q_button.grid(
+            row=0, 
+            column=3, 
+            sticky="e", 
+            padx=8
+        )
 
+        # Footer Buttons
         self.back_home_button = ttk.Button(
             self.footer_frame,
             text="Back home",
@@ -669,11 +763,11 @@ class disasterApp:
             command=self.show_home_display
         )
 
-        # Footer Buttons
         self.all_sync_button = ttk.Button(
             self.footer_frame, 
             text="Sync from Servers", 
-            padding=5
+            padding=5,
+            style="MainBG.TButton"
         )
         self.all_sync_button.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -683,7 +777,8 @@ class disasterApp:
 
         # Weather Main Status
         self.weather_status_indicator = statusIndicator(
-            self.w_status_frame
+            self.w_status_frame,
+            "#F0F0F0"
         )
         self.weather_status_indicator.grid(
             row=0,
@@ -699,7 +794,7 @@ class disasterApp:
         )
         self.weather_status_message.grid(
             row=0, 
-            column=0, 
+            column=1, 
             padx=10, 
             pady=10
         )
@@ -780,7 +875,8 @@ class disasterApp:
 
         # Flood Information (From API)
         self.flood_status_indicator = statusIndicator(
-            self.f_status_container
+            self.f_status_container,
+            "#D9D9D9"
         )
         self.flood_status_indicator.grid(row=0, column=0)
 
@@ -841,7 +937,8 @@ class disasterApp:
 
         # Earthquake Information (From API)
         self.earthquake_status_indicator = statusIndicator(
-            self.q_status_container
+            self.q_status_container,
+            "#D9D9D9"
         )
         self.earthquake_status_indicator.grid(row=0, column=0)
 
@@ -946,8 +1043,6 @@ class disasterApp:
         if self.locations:
             for locationInfo in self.locations.values():
                 locationInfo["view"].display_self()
-                print(f"{locationInfo["location"]} Shown")
-            print(self.locations)
         
         self.location_popup_menu.place(
             relx=0.5, 
@@ -978,7 +1073,8 @@ class disasterApp:
             location_info = self.locations[self.selected_location]
 
             self.current_location_label.config(
-                text=f"Current Location: {location_info["location"]}" 
+                text=f"Current Location: \n{location_info["location"]}",
+                wraplength=self.current_location_label.winfo_width()
             )
 
             self.search_radius_label.config(
@@ -992,7 +1088,16 @@ class disasterApp:
             self.search_radius_label.config(
                 text=f"Radius: Not Selected"
             )
+    
+    def update_local_storage(self):
+        with open(LOCATIONS_FILE, 'w') as locf:
+            locf = json.dump(self.locations, locf, indent=4)
+            print(locf)
 
 root = tk.Tk()
-app = disasterApp(root)
+app = disasterApp(
+    root, 
+    location_data=location_data, 
+    system_data=system_data
+)
 root.mainloop()
