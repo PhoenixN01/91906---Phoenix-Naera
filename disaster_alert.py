@@ -227,6 +227,7 @@ class locationEditFrame(ttk.Frame):
         self.info["location"] = self.location_entry.get().strip()
         self.info["radius"] = self.radius_entry.get().strip()
 
+        print(self.parent.locations[self.id])
         if self.info["location"] == "" or\
            self.info["location"] == "No city found":
             messagebox.showerror(
@@ -416,13 +417,16 @@ class disasterApp:
         self.location_items = {}
         self.selected_location = 0
         if location_data:
-            self.nextid = list(location_data)[-1]
+            self.nextid = int(list(location_data)[-1]) + 1
         else:
             self.nextid = 0
         
         self.create_styles()
         self.create_frames()
-        self.create_widgets()
+        self.create_widgets_main()
+        self.create_widgets_weather()
+        self.create_widgets_flood()
+        self.create_widgets_earthquake()
         self.create_location_menu()
 
     def create_styles(self):
@@ -584,12 +588,12 @@ class disasterApp:
             expand=True,
         )
     
-    def create_widgets(self):
-        """Creates the widgets for the GUI
+    def create_widgets_main(self):
+        """Creates the widgets for the Main GUI
 
-        create_widgets is used when creating all of the elements seen 
-        on-screen by users and is responsible for populating each
-        frame regardless of their display setting
+        this method is used when creating all of the elements seen 
+        on the home screen by users and is responsible for populating 
+        the main gui frame
         """
         # Refresh tag at top of GUI
         self.last_refresh_label = ttk.Label(
@@ -602,7 +606,8 @@ class disasterApp:
         # Current Location Display
         self.current_location_label = ttk.Label(
             self.location_frame,
-            text="Current Location: Not Selected",
+            text=f"Current Location: " + 
+            f"{self.locations[f"{self.selected_location}"]["location"]}",
             padding=(10, 0),
             style="Location.TLabel"
         )
@@ -619,7 +624,9 @@ class disasterApp:
         
         self.search_radius_label = ttk.Label(
             self.location_frame,
-            text="Radius: Not Selected",
+            text=f"Radius: " + 
+            f"{self.locations[f"{self.selected_location}"]["radius"]}" +
+            "km",
             padding=(10, 0),
             style="Radius.TLabel"
         )
@@ -665,7 +672,7 @@ class disasterApp:
         self.all_status_w_button = ttk.Button(
             self.all_status_row1,
             text="View Weather Details",
-            width=17,
+            width=22,
             padding=(0, 6),
             style="MainBG.TButton",
             command=self.show_weather_display
@@ -708,7 +715,7 @@ class disasterApp:
         self.all_status_f_button = ttk.Button(
             self.all_status_row2,
             text="View Flood Alerts",
-            width=17,
+            width=22,
             padding=(0, 6),
             style="MainBG.TButton",
             command=self.show_flood_display
@@ -751,7 +758,7 @@ class disasterApp:
         self.all_status_q_button = ttk.Button(
             self.all_status_row3,
             text="View Earthquake Alerts",
-            width=17,
+            width=22,
             padding=(0, 6),
             style="MainBG.TButton",
             command=self.show_earthquake_display
@@ -779,10 +786,13 @@ class disasterApp:
         )
         self.all_sync_button.place(relx=0.5, rely=0.5, anchor="center")
 
+    def create_widgets_weather(self):
+        """Creates the widgets for the Weather GUI
 
-        # ---- Weather Specific Window ----
-
-
+        this method is used when creating all of the elements seen 
+        on the weather screen by users and is responsible for populating 
+        the weather gui frame
+        """
         # Weather Main Status
         self.weather_status_indicator = statusIndicator(
             self.w_status_frame,
@@ -871,8 +881,13 @@ class disasterApp:
         )
         self.weather_surface_pressure_label.grid(row=0, column=3)
 
-        # ---- Flood Specific Window ----
+    def create_widgets_flood(self):
+        """Creates the widgets for the Flood GUI
 
+        This method is used when creating all of the elements seen 
+        on the flood screen by users and is responsible for populating 
+        the flood gui frame
+        """
         # Flood Screen Title
         self.flood_screen_title = ttk.Label(
             self.f_title_frame,
@@ -933,8 +948,13 @@ class disasterApp:
             sticky="e"
         )
 
-        # ---- Earthquake Specific Window ----
+    def create_widgets_earthquake(self):
+        """Creates the widgets for the Earthquake GUI
 
+        This method is used when creating all of the elements seen 
+        on the earthquake screen by users and is responsible for 
+        populating the earthquake gui frame
+        """
         # Earthquake Screen Title
         self.earthquake_screen_title = ttk.Label(
             self.q_title_frame,
