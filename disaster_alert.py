@@ -189,16 +189,13 @@ class locationEditFrame(ttk.Frame):
             if radius > 0:
                 self.info["radius"] = radius
                 return True
-        except Exception as e:
-            messagebox.showerror("Error", f"Error: {e}")
+        except:
+            messagebox.showerror(
+                "Input Error", 
+                ("Radius Input Must be a " +
+                "Positive Integer Value to continue")
+            )
             return False
-        
-        messagebox.showerror(
-            "Input Error", 
-            ("Radius Input Must be a " +
-            "Positive Integer Value to continue")
-        )
-        return False
     
     def remove_location(self):
         l = self.parent.locations[self.id]["location"]
@@ -293,8 +290,11 @@ class locationEditFrame(ttk.Frame):
             else:
                 messagebox.showerror("Error", "Location Not Found")
                 return False
-        except Exception as e:
-            messagebox.showerror("Error", f"Error: {e}")
+        except:
+            messagebox.showerror(
+                "Error", 
+                "An error occured while trying to get location info"
+            )
             return False
 
 
