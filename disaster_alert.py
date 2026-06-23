@@ -39,6 +39,11 @@ CITIES = load_cities()
 GEOLOCATOR = Nominatim(user_agent="my_geo_app")
 
 class statusIndicator(tk.Canvas):
+    """Creates an indicator widget
+
+    This class creates and contains the functionality of the indicator
+    lights of the app
+    """
     def __init__(self, parent, bg_colour):
         super().__init__(
             parent,
@@ -61,7 +66,12 @@ class statusIndicator(tk.Canvas):
         self.itemconfig(self.light, fill=colour)
     
 class locationEditFrame(ttk.Frame):
-    """Edit menu for editing location details.
+    """Edit menu for editing locationItem details.
+
+    :param frame: The parent container of the edit frame
+    :param parent: The disasterApp containing the location dict
+    :param locationItem: The corresponding locationItem
+    :param locationExists: False if a new location is being created
 
     This class is used to serve as a way to update and add details to
     new or existing location items. This class is paired with a location
@@ -69,22 +79,23 @@ class locationEditFrame(ttk.Frame):
     designated location, allowing edit menu's to isolate their specific
     location for modification.
     """
-    def __init__(self, frame, parent, locationItem, id, locationExists):
+    def __init__(self, frame, parent, locationItem, locationExists):
         super().__init__(frame)
         self.options = CITIES
         self.locationItem = locationItem
         self.parent = parent
-        self.id = id
+        self.id = locationItem.id
         self.location_exists = locationExists
         self.info = {
-            "location": self.parent.locations[id]["location"],
-            "radius": self.parent.locations[id]["radius"],
-            "coords": self.parent.locations[id]["coords"]
+            "location": self.parent.locations[self.id]["location"],
+            "radius": self.parent.locations[self.id]["radius"],
+            "coords": self.parent.locations[self.id]["coords"]
         }
 
         self.create_display()
     
     def create_display(self):
+        """Creates the display of a locationEditFrame"""
         self.input_frame = ttk.Frame(self, padding=10)
         self.input_frame.pack()
         self.input_frame.columnconfigure(1, weight=1)
@@ -147,6 +158,7 @@ class locationEditFrame(ttk.Frame):
         self.cancel_button.grid(row=0, column=2, padx=5)
 
     def update_suggestions(self, event):
+        """Updates location suggestions in locationEditItem's listbox"""
         typed = self.location_entry.get().lower()
 
         self.listbox.delete(0, tk.END)
@@ -168,6 +180,7 @@ class locationEditFrame(ttk.Frame):
             self.listbox.insert(tk.END, "No city found")
 
     def select_item(self, event):
+        """Gets value of selected locationEditItem listbox"""
         selection = self.listbox.curselection()
 
         if not selection:
@@ -184,6 +197,7 @@ class locationEditFrame(ttk.Frame):
         self.listbox.delete(0, tk.END)
     
     def validate_radius(self):
+        """Checks if radius input value is a positive integer"""
         try:
             radius = int(self.info["radius"])
             if radius > 0:
@@ -198,6 +212,7 @@ class locationEditFrame(ttk.Frame):
             return False
     
     def remove_location(self):
+        """Removes the locationItem's location"""
         l = self.parent.locations[self.id]["location"]
         ask_to_delete = messagebox.askyesno(
             "Confirm Removal",
@@ -221,6 +236,11 @@ class locationEditFrame(ttk.Frame):
         self.destroy()
     
     def save_changes(self):
+        """Saves changes for locationItem's location
+        
+        Only updates location if the input values are all valid.
+        Error shown if unsuccessfully validated
+        """
         self.info["location"] = self.location_entry.get().strip()
         self.info["radius"] = self.radius_entry.get().strip()
 
@@ -260,6 +280,11 @@ class locationEditFrame(ttk.Frame):
         self.destroy()
     
     def cancel_changes(self):
+        """Cancel any changes made to locationItem's location
+        
+        Removes the locationItem and its value if a new location was
+        created without any values
+        """
         if self.location_exists:
             self.destroy()
         else:
@@ -270,11 +295,23 @@ class locationEditFrame(ttk.Frame):
             self.destroy()
     
     def get_coordinates(self):
+        """Gets lat lon coordinates from a 'City, Country' address"""
         address = self.location_entry.get()
         if "," not in address:
             messagebox.showerror(
                 "Format Error", 
                 "Locations must be written as: City, Country"
+            )
+            return False
+        
+        city, country = address.split(",", 1)
+        address_item = {"city": city, "country": country}
+        
+        if address_item not in self.options:
+            messagebox.showerror(
+                "Value Error", 
+                "Location Not Found.\n\n" + 
+                "Please use suggestions provided for available cities"
             )
             return False
         
@@ -300,6 +337,10 @@ class locationEditFrame(ttk.Frame):
 
 class locationItem(ttk.Frame):
     """Creates a location item
+
+    :param frame: The Parent container of the locationItem
+    :param parent: The disasterApp that contains the location dict
+    :param id: The location id assigned to the locationItem
 
     This class is responsible for housing a saved location within the
     program, serving as a modular element that can be cloned and 
@@ -362,7 +403,6 @@ class locationItem(ttk.Frame):
             self.parent.location_popup_menu, 
             self.parent, 
             self,
-            self.id,
             locationExists
         )
         self.edit_menu.lift()
@@ -398,6 +438,15 @@ class locationItem(ttk.Frame):
         )
 
 class disasterApp:
+    """Creates an instance of the disasterApp
+    
+    :param root: The root window for the app
+    :param location_data: The locally stored location data
+    :param system_data: The locally stored system data
+
+    This class is responsible for initiating and operating the disaster
+    app
+    """
     def __init__(self, root, location_data, system_data):
         self.root = root
         self.root.title("Local Disaster Alert System")
@@ -430,6 +479,7 @@ class disasterApp:
         self.create_location_menu()
 
     def create_styles(self):
+        """Creates the ttk styles for the disasterApp"""
         self.style.configure(
             "MainBG.TFrame",
             background="#F0F0F0"
@@ -1010,6 +1060,7 @@ class disasterApp:
         )
     
     def show_home_display(self):
+        """Updates disasterApp view to show home info"""
         self.all_status_frame.pack(fill="x", expand=True)
         self.weather_frame.pack_forget()
         self.flood_frame.pack_forget()
@@ -1017,6 +1068,7 @@ class disasterApp:
         self.back_home_button.pack_forget()
     
     def show_weather_display(self):
+        """Updates disasterApp view to show weather info"""
         self.all_status_frame.pack_forget()
         self.weather_frame.pack(fill="x", expand=True)
         self.flood_frame.pack_forget()
@@ -1024,6 +1076,7 @@ class disasterApp:
         self.back_home_button.pack(side="left")
 
     def show_flood_display(self):
+        """Updates disasterApp view to show flood info"""
         self.all_status_frame.pack_forget()
         self.weather_frame.pack_forget()
         self.flood_frame.pack(fill="x", expand=True)
@@ -1031,6 +1084,7 @@ class disasterApp:
         self.back_home_button.pack(side="left")
     
     def show_earthquake_display(self):
+        """Updates disasterApp view to show earthquake info"""
         self.all_status_frame.pack_forget()
         self.weather_frame.pack_forget()
         self.flood_frame.pack_forget()
@@ -1038,6 +1092,7 @@ class disasterApp:
         self.back_home_button.pack(side="left")
     
     def create_location_menu(self):
+        """Initiates the disasterApp location menu popup"""
         self.location_popup_menu = ttk.Frame(
             self.root,
             borderwidth=3,
@@ -1068,6 +1123,11 @@ class disasterApp:
         self.new_location_button.place(relx=0.5, rely=1, anchor="s")
         
     def show_location_menu(self):
+        """Opens the disasterApp location menu
+        
+        If location data exists then the menu will be populated with 
+        locationItems assigned to each existing location found
+        """
         if self.locations:
             if self.location_items:
                 print(self.location_items)
@@ -1090,6 +1150,11 @@ class disasterApp:
         )
     
     def create_location(self):
+        """Creates a new location
+        
+        This method initiates a blank location item in the disasterApp
+        and assigns a locationItem to it
+        """
         id = self.nextid
         self.nextid += 1
         self.locations[id] = {
@@ -1105,6 +1170,7 @@ class disasterApp:
         )
     
     def update_display(self, location=True):
+        """Update the disasterApp display"""
         if location:
             location_info = self.locations[self.selected_location]
 
