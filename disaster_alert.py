@@ -7,6 +7,9 @@ from timezonefinder import TimezoneFinder
 import json
 import os
 
+from api_files import WeatherAPI
+
+
 CITIES_FILE = "cities.json"
 LOCATIONS_FILE = "stored_locations.json"
 SYSTEM_FILE = "menu_history.json"
@@ -270,8 +273,8 @@ class locationEditFrame(ttk.Frame):
         if not validated_radius or not validated_location:
             return
         self.info["timezone"] = TF.timezone_at(
-            lng=self.info["coords"][0], 
-            lat=self.info["coords"][1]
+            lng=self.info["coords"][1], 
+            lat=self.info["coords"][0]
         )
         self.parent.locations[self.id]["location"] = self.info[
             "location"]
@@ -665,8 +668,7 @@ class disasterApp:
         # Current Location Display
         self.current_location_label = ttk.Label(
             self.location_frame,
-            text=f"Current Location: " + 
-            f"{self.locations[f"{self.selected_location}"]["location"]}",
+            text=f"Current Location: Not Selected",
             padding=(10, 0),
             style="Location.TLabel"
         )
@@ -683,8 +685,7 @@ class disasterApp:
         
         self.search_radius_label = ttk.Label(
             self.location_frame,
-            text=f"Radius: " + 
-            f"{self.locations[f"{self.selected_location}"]["radius"]}" +
+            text=f"Radius: Not Selected" +
             "km",
             padding=(10, 0),
             style="Radius.TLabel"
@@ -841,7 +842,8 @@ class disasterApp:
             self.footer_frame, 
             text="Sync from Servers", 
             padding=5,
-            style="MainBG.TButton"
+            style="MainBG.TButton",
+            command=self.refresh_api_data
         )
         self.all_sync_button.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -1204,6 +1206,31 @@ class disasterApp:
     def update_local_storage(self):
         with open(LOCATIONS_FILE, 'w') as locf:
             locf = json.dump(self.locations, locf, indent=4)
+    
+    def initiate_api_cache(self):
+        weather_cache = WeatherAPI.initialize_cache()
+        return weather_cache
+
+    def refresh_api_data(self):
+        api_package = {
+            "location": [],
+            "radius": [],
+            "lat": [],
+            "lon": [],
+            "timezone": []
+        }
+        for location in self.locations.values():
+            api_package["location"].append(location["location"])
+            api_package["radius"].append(location["radius"])
+            api_package["lat"].append(location["coords"][0])
+            api_package["lon"].append(location["coords"][1])
+            api_package["timezone"].append(location["timezone"])
+        weather_cache = self.initiate_api_cache()
+        self.weather_data = WeatherAPI.get_weather_data(
+            weather_cache,
+            api_package
+        )
+        
 
 root = tk.Tk()
 app = disasterApp(

@@ -40,7 +40,7 @@ def get_weather_data(session, locations):
 		"longitude": locations["lon"],
 		"daily": ["sunrise", "sunset"],
 		"hourly": WEATHER_FIELDS,
-		"timezone": locations["timezones"]
+		"timezone": locations["timezone"]
 	}
 	responses = openmeteo.weather_api(url, params = params)
 
@@ -122,7 +122,7 @@ timezone_name = tf.timezone_at(
 	lat=locations["lat"][0]
 )
 
-locations["timezones"] = [timezone_name]
+locations["timezone"] = [timezone_name]
 
 hourly_weather, daily_data = get_weather_data(
 	session, 
