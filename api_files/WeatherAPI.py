@@ -1,87 +1,138 @@
 import openmeteo_requests
 
-import pandas as pd
+import datetime
 import requests_cache
 from retry_requests import retry
+import json
+from timezonefinder import TimezoneFinder
 
-def get_weather_data():
+WEATHER_FIELDS = [
+		"temperature_2m",
+		"apparent_temperature",
+		"precipitation_probability",
+		"rain",
+		"cloud_cover",
+		"wind_speed_10m",
+		"wind_direction_10m",
+		"wind_gusts_10m",
+		"relative_humidity_2m",
+		"surface_pressure"
+]
+
+def initialize_cache():
 	# Setup the Open-Meteo API client with cache and retry on error
-	cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
-	retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-	openmeteo = openmeteo_requests.Client(session = retry_session)
+	cache_session = requests_cache.CachedSession(
+		'weather.cache', 
+		expire_after = 3600
+	)
+	retry_session = retry(
+		cache_session, 
+		retries = 5, 
+		backoff_factor = 0.2
+	)
+	return retry_session
 
-
+def get_weather_data(session, locations):
+	openmeteo = openmeteo_requests.Client(session = session)
 	url = "https://api.open-meteo.com/v1/forecast"
 	params = {
-		"latitude": -36.85,
-		"longitude": 174.76,
+		"latitude": locations["lat"],
+		"longitude": locations["lon"],
 		"daily": ["sunrise", "sunset"],
-		"hourly": ["temperature_2m", "apparent_temperature", "precipitation_probability", "rain", "cloud_cover", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "relative_humidity_2m", "surface_pressure"],
-		"timezone": "Pacific/Auckland"
+		"hourly": WEATHER_FIELDS,
+		"timezone": locations["timezones"]
 	}
 	responses = openmeteo.weather_api(url, params = params)
 
-	# Process first location. Add a for-loop for multiple locations or weather models
-	response = responses[0]
-	print(f"Coordinates: {response.Latitude()}°N {response.Longitude()}°E")
-	print(f"Elevation: {response.Elevation()} m asl")
-	print(f"Timezone: {response.Timezone()}{response.TimezoneAbbreviation()}")
-	print(f"Timezone difference to GMT+0: {response.UtcOffsetSeconds()}s")
+	all_hourly_weather = {}
+	all_daily_data = {}
 
-	# Process hourly data. The order of variables needs to be the same as requested.
-	hourly = response.Hourly()
-	hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
-	hourly_apparent_temperature = hourly.Variables(1).ValuesAsNumpy()
-	hourly_precipitation_probability = hourly.Variables(2).ValuesAsNumpy()
-	hourly_rain = hourly.Variables(3).ValuesAsNumpy()
-	hourly_cloud_cover = hourly.Variables(4).ValuesAsNumpy()
-	hourly_wind_speed_10m = hourly.Variables(5).ValuesAsNumpy()
-	hourly_wind_direction_10m = hourly.Variables(6).ValuesAsNumpy()
-	hourly_wind_gusts_10m = hourly.Variables(7).ValuesAsNumpy()
-	hourly_relative_humidity_2m = hourly.Variables(8).ValuesAsNumpy()
-	hourly_surface_pressure = hourly.Variables(9).ValuesAsNumpy()
+	for n in range(len(locations["location"])):
+		# Process first location. Add a for-loop for multiple locations or weather models
+		response = responses[n]
+		print(f"Coordinates: {response.Latitude()}°N {response.Longitude()}°E")
+		print(f"Elevation: {response.Elevation()} m asl")
+		print(f"Timezone: {response.Timezone()}{response.TimezoneAbbreviation()}")
+		print(f"Timezone difference to GMT+0: {response.UtcOffsetSeconds() / 3600}hrs")
 
-	hourly_data = {
-		"date": pd.date_range(
-			start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
-			end =  pd.to_datetime(hourly.TimeEnd(), unit = "s", utc = True),
-			freq = pd.Timedelta(seconds = hourly.Interval()),
-			inclusive = "left"
-		).tz_convert(response.Timezone().decode())
-	}
+		# Process hourly data.
+		hourly = response.Hourly()
+		hourly_weather = {}
 
-	hourly_data["temperature_2m"] = hourly_temperature_2m
-	hourly_data["apparent_temperature"] = hourly_apparent_temperature
-	hourly_data["precipitation_probability"] = hourly_precipitation_probability
-	hourly_data["rain"] = hourly_rain
-	hourly_data["cloud_cover"] = hourly_cloud_cover
-	hourly_data["wind_speed_10m"] = hourly_wind_speed_10m
-	hourly_data["wind_direction_10m"] = hourly_wind_direction_10m
-	hourly_data["wind_gusts_10m"] = hourly_wind_gusts_10m
-	hourly_data["relative_humidity_2m"] = hourly_relative_humidity_2m
-	hourly_data["surface_pressure"] = hourly_surface_pressure
+		hourly_variables = {
+			field: hourly.Variables(i).ValuesAsNumpy()
+			for i, field in enumerate(WEATHER_FIELDS)
+		}
 
-	hourly_dataframe = pd.DataFrame(data = hourly_data)
-	print("\nHourly data\n", hourly_dataframe)
+		start_time = hourly.Time()
+		interval = hourly.Interval()
 
-	# Process daily data. The order of variables needs to be the same as requested.
-	daily = response.Daily()
-	daily_sunrise = daily.Variables(0).ValuesInt64AsNumpy()
-	daily_sunset = daily.Variables(1).ValuesInt64AsNumpy()
+		num_hours = len(next(iter(hourly_variables.values())))
 
-	daily_data = {
-		"date": pd.date_range(
-			start = pd.to_datetime(daily.Time(), unit = "s", utc = True),
-			end =  pd.to_datetime(daily.TimeEnd(), unit = "s", utc = True),
-			freq = pd.Timedelta(seconds = daily.Interval()),
-			inclusive = "left"
-		).tz_convert(response.Timezone().decode())
-	}
+		for hour in range(num_hours):
+			timestamp = datetime.datetime.fromtimestamp(
+				start_time + hour * interval
+			).strftime("%Y-%m-%d %H:%M")
 
-	daily_data["sunrise"] = daily_sunrise
-	daily_data["sunset"] = daily_sunset
+			hourly_weather[timestamp] = {
+				field: float(values[hour])
+				for field, values in hourly_variables.items()
+			}
 
-	daily_dataframe = pd.DataFrame(data = daily_data)
-	print("\nDaily data\n", daily_dataframe)
+		# Process daily data
+		daily = response.Daily()
+		daily_sunrise = daily.Variables(0).ValuesInt64AsNumpy()
+		daily_sunrise_converted = datetime.datetime.fromtimestamp(
+			daily_sunrise[0])
+		daily_sunrise_string = daily_sunrise_converted.strftime("%I:%M %p")
 
-get_weather_data()
+		daily_sunset = daily.Variables(1).ValuesInt64AsNumpy()
+		daily_sunset_converted = datetime.datetime.fromtimestamp(
+			daily_sunset[0])
+		daily_sunset_string = daily_sunset_converted.strftime("%I:%M %p")
+
+		daily_timestamp = datetime.datetime.fromtimestamp(
+			daily.Time(),
+			tz=datetime.timezone.utc
+		)
+
+		daily_data = {
+			"date": daily_timestamp.strftime("%Y-%m-%d"),
+			"sunrise": daily_sunrise_string,
+			"sunset": daily_sunset_string
+		}
+		print(n)
+		print(locations["location"])
+		all_hourly_weather[locations["location"][n]] = hourly_weather
+		all_daily_data[locations["location"][n]] = daily_data
+
+	return all_hourly_weather, all_daily_data
+
+session = initialize_cache()
+
+locations = {
+	"location": ["Auckland, New Zealand"],	
+	"lat": [-36.852095],
+	"lon": [174.7631803]
+}
+
+tf = TimezoneFinder()
+timezone_name = tf.timezone_at(
+	lng=locations["lon"][0], 
+	lat=locations["lat"][0]
+)
+
+locations["timezones"] = [timezone_name]
+
+hourly_weather, daily_data = get_weather_data(
+	session, 
+	locations
+)
+
+print("\nHourly Weather:")
+print(json.dumps(hourly_weather, indent=4))
+
+print("\nDaily Data:")
+print(json.dumps(daily_data, indent=4))
+
+print(hourly_weather.keys())

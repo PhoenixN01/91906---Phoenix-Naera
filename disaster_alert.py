@@ -3,12 +3,14 @@ from tkinter import messagebox
 from tkinter import ttk
 from datetime import datetime
 from geopy.geocoders import Nominatim
+from timezonefinder import TimezoneFinder
 import json
 import os
 
 CITIES_FILE = "cities.json"
 LOCATIONS_FILE = "stored_locations.json"
 SYSTEM_FILE = "menu_history.json"
+TF = TimezoneFinder()
 
 if not os.path.exists(LOCATIONS_FILE):
     with open(LOCATIONS_FILE, 'w') as locf:
@@ -157,6 +159,14 @@ class locationEditFrame(ttk.Frame):
         )
         self.cancel_button.grid(row=0, column=2, padx=5)
 
+    def validate_city(self, value):
+        valid_list = []
+        for city in self.options:
+            full_name = f"{city['city']}, {city['country']}"
+            if value.lower() in full_name.lower():
+                valid_list.append(full_name)
+        return valid_list
+
     def update_suggestions(self, event):
         """Updates location suggestions in locationEditItem's listbox"""
         typed = self.location_entry.get().lower()
@@ -166,12 +176,7 @@ class locationEditFrame(ttk.Frame):
         if not typed:
             return
         
-        matches = []
-
-        for city in self.options:
-            full_name = f"{city['city']}, {city['country']}"
-            if typed in full_name.lower():
-                matches.append(full_name)
+        matches = self.validate_city(typed)
         
         if matches:
             for match in matches:
@@ -264,11 +269,16 @@ class locationEditFrame(ttk.Frame):
 
         if not validated_radius or not validated_location:
             return
-
+        self.info["timezone"] = TF.timezone_at(
+            lng=self.info["coords"][0], 
+            lat=self.info["coords"][1]
+        )
         self.parent.locations[self.id]["location"] = self.info[
             "location"]
         self.parent.locations[self.id]["radius"] = self.info["radius"]
         self.parent.locations[self.id]["coords"] = self.info["coords"]
+        self.parent.locations[self.id]["timezone"] = self.info[
+            "timezone"]
         self.locationItem.location_label.config(
             text=self.info["location"]
         )
@@ -304,10 +314,9 @@ class locationEditFrame(ttk.Frame):
             )
             return False
         
-        city, country = address.split(",", 1)
-        address_item = {"city": city, "country": country}
+        valid_city = self.validate_city(address)
         
-        if address_item not in self.options:
+        if valid_city == []:
             messagebox.showerror(
                 "Value Error", 
                 "Location Not Found.\n\n" + 
@@ -1160,7 +1169,8 @@ class disasterApp:
         self.locations[id] = {
             "location": "",
             "radius": "",
-            "coords": ""
+            "coords": "",
+            "timezone": ""
         }
 
         self.location_items[id] = locationItem(
