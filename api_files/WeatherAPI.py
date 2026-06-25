@@ -7,16 +7,16 @@ import json
 from timezonefinder import TimezoneFinder
 
 WEATHER_FIELDS = [
-		"temperature_2m",
-		"apparent_temperature",
-		"precipitation_probability",
-		"rain",
-		"cloud_cover",
-		"wind_speed_10m",
-		"wind_direction_10m",
-		"wind_gusts_10m",
-		"relative_humidity_2m",
-		"surface_pressure"
+	"temperature_2m",
+	"apparent_temperature",
+	"precipitation_probability",
+	"rain",
+	"cloud_cover",
+	"wind_speed_10m",
+	"wind_direction_10m",
+	"wind_gusts_10m",
+	"relative_humidity_2m",
+	"surface_pressure"
 ]
 
 def initialize_cache():
@@ -32,28 +32,28 @@ def initialize_cache():
 	)
 	return retry_session
 
-def get_weather_data(session, locations):
+def get_weather_data(session, package):
 	openmeteo = openmeteo_requests.Client(session = session)
 	url = "https://api.open-meteo.com/v1/forecast"
 	params = {
-		"latitude": locations["lat"],
-		"longitude": locations["lon"],
+		"latitude": package["lat"],
+		"longitude": package["lon"],
 		"daily": ["sunrise", "sunset"],
 		"hourly": WEATHER_FIELDS,
-		"timezone": locations["timezone"]
+		"timezone": package["timezone"]
 	}
 	responses = openmeteo.weather_api(url, params = params)
 
 	all_hourly_weather = {}
 	all_daily_data = {}
 
-	for n in range(len(locations["location"])):
+	for n in range(len(package["location"])):
 		# Process first location. Add a for-loop for multiple locations or weather models
 		response = responses[n]
-		print(f"Coordinates: {response.Latitude()}°N {response.Longitude()}°E")
-		print(f"Elevation: {response.Elevation()} m asl")
-		print(f"Timezone: {response.Timezone()}{response.TimezoneAbbreviation()}")
-		print(f"Timezone difference to GMT+0: {response.UtcOffsetSeconds() / 3600}hrs")
+		# print(f"Coordinates: {response.Latitude()}°N {response.Longitude()}°E")
+		# print(f"Elevation: {response.Elevation()} m asl")
+		# print(f"Timezone: {response.Timezone()}{response.TimezoneAbbreviation()}")
+		# print(f"Timezone difference to GMT+0: {response.UtcOffsetSeconds() / 3600}hrs")
 
 		# Process hourly data.
 		hourly = response.Hourly()
@@ -101,17 +101,15 @@ def get_weather_data(session, locations):
 			"sunrise": daily_sunrise_string,
 			"sunset": daily_sunset_string
 		}
-		print(n)
-		print(locations["location"])
-		all_hourly_weather[locations["location"][n]] = hourly_weather
-		all_daily_data[locations["location"][n]] = daily_data
+		all_hourly_weather[package["location"][n]] = hourly_weather
+		all_daily_data[package["location"][n]] = daily_data
 
 	return all_hourly_weather, all_daily_data
 
 session = initialize_cache()
 
 locations = {
-	"location": ["Auckland, New Zealand"],	
+	"location": ["Auckland, New Zealand"],
 	"lat": [-36.852095],
 	"lon": [174.7631803]
 }

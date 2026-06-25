@@ -1,13 +1,14 @@
 import tkinter as tk
 from tkinter import messagebox
 from tkinter import ttk
-from datetime import datetime
+from datetime import datetime, timedelta
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
 import json
 import os
 
 from api_files import WeatherAPI
+from api_files import EarthquakeAPI
 
 
 CITIES_FILE = "cities.json"
@@ -16,27 +17,27 @@ SYSTEM_FILE = "menu_history.json"
 TF = TimezoneFinder()
 
 if not os.path.exists(LOCATIONS_FILE):
-    with open(LOCATIONS_FILE, 'w') as locf:
+    with open(LOCATIONS_FILE, 'w', encoding='utf-8') as locf:
         json.dump({}, locf, indent=4)
 else:
     try:
-        with open(LOCATIONS_FILE, 'r') as locf:
+        with open(LOCATIONS_FILE, 'r', encoding='utf-8') as locf:
             location_data = json.load(locf)
     except (json.JSONDecodeError, OSError):
         location_data = {}
 
 if not os.path.exists(SYSTEM_FILE):
-    with open(SYSTEM_FILE, 'w') as sysf:
+    with open(SYSTEM_FILE, 'w', encoding='utf-8') as sysf:
         json.dump({}, sysf, indent=4)
 else:
     try:
-        with open(SYSTEM_FILE, 'r') as sysf:
+        with open(SYSTEM_FILE, 'r', encoding='utf-8') as sysf:
             system_data = json.load(sysf)
     except (json.JSONDecodeError, OSError):
         system_data = {}
 
 def load_cities():
-    with open(CITIES_FILE, "r") as ctyf:
+    with open(CITIES_FILE, "r", encoding='utf-8') as ctyf:
         return json.load(ctyf)
     
 CITIES = load_cities()
@@ -111,6 +112,7 @@ class locationEditFrame(ttk.Frame):
             padding=10
         )
         self.location_label.grid(row=0, column=0, sticky="e")
+
         self.location_entry = ttk.Entry(self.input_frame, width=30)
         self.location_entry.insert(0, self.info["location"])
         self.location_entry.grid(row=0, column=1)
@@ -121,6 +123,7 @@ class locationEditFrame(ttk.Frame):
             padding=10
         )
         self.radius_label.grid(row=1, column=0, sticky="e")
+
         self.radius_entry = ttk.Entry(self.input_frame, width=30)
         self.radius_entry.insert(0, self.info["radius"])
         self.radius_entry.grid(row=1, column=1)
@@ -163,6 +166,7 @@ class locationEditFrame(ttk.Frame):
         self.cancel_button.grid(row=0, column=2, padx=5)
 
     def validate_city(self, value):
+        """Validates a city input against CITIES stored data"""
         valid_list = []
         for city in self.options:
             full_name = f"{city['city']}, {city['country']}"
@@ -231,7 +235,7 @@ class locationEditFrame(ttk.Frame):
             return
         
         if self.parent.selected_location == self.locationItem.id:
-            self.parent.update_display(False)
+            self.parent.update_main_display(False)
 
         self.parent.locations.pop(self.locationItem.id, None)
         self.parent.update_local_storage()
@@ -252,7 +256,6 @@ class locationEditFrame(ttk.Frame):
         self.info["location"] = self.location_entry.get().strip()
         self.info["radius"] = self.radius_entry.get().strip()
 
-        print(self.parent.locations[self.id])
         if self.info["location"] == "" or\
            self.info["location"] == "No city found":
             messagebox.showerror(
@@ -289,7 +292,6 @@ class locationEditFrame(ttk.Frame):
             text=f"Radius: {self.info["radius"]}km"
         )
         self.parent.update_local_storage()
-        print(self.info)
         self.destroy()
     
     def cancel_changes(self):
@@ -406,11 +408,14 @@ class locationItem(ttk.Frame):
                 self.parent.locations[id]["radius"] or 
                 self.parent.locations[id]["coords"]):
             self.edit_location(False)
-    
-    def display_self(self):
-        self.pack(fill="x", expand=False)
 
     def edit_location(self, locationExists):
+        """Open a locationEditFrame to edit / remove the location
+        
+        Allows the user to edit the locationItem by opening a 
+        locationEditFrame class that can edit or remove this items 
+        location data from temporary and local storage 
+        """
         self.edit_menu = locationEditFrame(
             self.parent.location_popup_menu, 
             self.parent, 
@@ -427,10 +432,16 @@ class locationItem(ttk.Frame):
         )
     
     def select_location(self):
+        """Sets this locationItem's location as the active location
+        
+        Updates the selected location for the menu to the corresponding
+        locationItem's assigned location, automatically deselecting all
+        other locations when doing so
+        """
         self.select_button.config(text="(Active)")
         self.select_button.state(["disabled"])
         self.parent.selected_location = self.id
-        self.parent.update_display()
+        self.parent.update_main_display()
 
         for location in self.parent.location_items.values():
             if not location == self:
@@ -448,6 +459,13 @@ class locationItem(ttk.Frame):
         self.radius_label.config(
             text=f"Radius: {data["location"]}km"
         )
+
+class AppCache:
+    def __init__(self):
+        self.live_data = None
+        self.history = []
+        self.last_live_update = None
+        self.last_history_update = None
 
 class disasterApp:
     """Creates an instance of the disasterApp
@@ -468,27 +486,36 @@ class disasterApp:
         self.style = ttk.Style()
         self.style.theme_use("clam")
         self.root.configure(bg="#F0F0F0")
+        
+        self.last_refresh = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+        self.next_refresh = None
 
-        current_time = datetime.now()
+        self.refresh_minute = 5
         
-        self.last_all_refresh = \
-            current_time.strftime("%Y-%m-%d %I:%M %p")
-        
-        self.locations = location_data
+        self.locations = {}
         self.location_items = {}
         self.selected_location = 0
+
         if location_data:
+            self.locations = location_data
             self.nextid = int(list(location_data)[-1]) + 1
         else:
             self.nextid = 0
         
+        self.cache = AppCache()
+
+        self.weather_session = WeatherAPI.initialize_cache()
+        # self.earthquake_log = EarthquakeAPI.initialize_log()
+
+        self.weather_data = {}
+
+        
         self.create_styles()
         self.create_frames()
-        self.create_widgets_main()
-        self.create_widgets_weather()
-        self.create_widgets_flood()
-        self.create_widgets_earthquake()
+        self.create_widgets_all()
         self.create_location_menu()
+
+        self.refresh_all_data()
 
     def create_styles(self):
         """Creates the ttk styles for the disasterApp"""
@@ -649,6 +676,12 @@ class disasterApp:
             fill="both", 
             expand=True,
         )
+
+    def create_widgets_all(self):
+        self.create_widgets_main()
+        self.create_widgets_weather()
+        self.create_widgets_flood()
+        self.create_widgets_earthquake()
     
     def create_widgets_main(self):
         """Creates the widgets for the Main GUI
@@ -660,7 +693,7 @@ class disasterApp:
         # Refresh tag at top of GUI
         self.last_refresh_label = ttk.Label(
             self.refresh_frame, 
-            text=f"Last refreshed at:    {self.last_all_refresh}",
+            text=f"Last refreshed at: {self.last_refresh}",
             style="LastRefresh.TLabel"
             )
         self.last_refresh_label.pack(side="top")
@@ -685,8 +718,7 @@ class disasterApp:
         
         self.search_radius_label = ttk.Label(
             self.location_frame,
-            text=f"Radius: Not Selected" +
-            "km",
+            text=f"Radius: Not Selected",
             padding=(10, 0),
             style="Radius.TLabel"
         )
@@ -843,7 +875,7 @@ class disasterApp:
             text="Sync from Servers", 
             padding=5,
             style="MainBG.TButton",
-            command=self.refresh_api_data
+            command=self.refresh_all_data
         )
         self.all_sync_button.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -1141,7 +1173,6 @@ class disasterApp:
         """
         if self.locations:
             if self.location_items:
-                print(self.location_items)
                 for location in self.location_items.values():
                     location.display_self()
             else:
@@ -1181,13 +1212,13 @@ class disasterApp:
             id
         )
     
-    def update_display(self, location=True):
+    def update_main_display(self, location=True):
         """Update the disasterApp display"""
         if location:
             location_info = self.locations[self.selected_location]
 
             self.current_location_label.config(
-                text=f"Current Location: \n{location_info["location"]}",
+                text=f"Current Location:\n{location_info["location"]}",
                 wraplength=self.current_location_label.winfo_width()
             )
 
@@ -1202,16 +1233,46 @@ class disasterApp:
             self.search_radius_label.config(
                 text=f"Radius: Not Selected"
             )
+        
+    def update_weather_display(self):
+        location_key = self.locations[self.selected_location]
+        timestamps = self.weather_data["hourly"][location_key].keys()
+        hour_data = self.weather_data["hourly"][location_key].values()
+        daily_data = self.weather_data["daily"][location_key]
+
+        self.weather_sunrise_label.config(
+            text=f"Sunrise: {daily_data["sunrise"]}"
+        )
+        self.weather_sunset_label.config(
+            text=f"Sunset: {daily_data["sunset"]}"
+        )
+
+        self.weather_temp_label.config(
+            text="Current Temperature: " + 
+            f"{round(hour_data[0]["temperature_2m"])}℃\n\n" + 
+            "(feels like: " + 
+            f"{round(hour_data[0]["apparent_temperature"])}℃)"
+        )
+        self.weather_rain_chance_label.config(
+            text="Chance of Rain: \n" + 
+            f"{round(hour_data[0]["precipitation_probability"])}%"
+        )
+        self.weather_cloud_cover_label.config(
+            text=f"{hour_data[0]["cloud_cover"]}"
+        )
     
     def update_local_storage(self):
-        with open(LOCATIONS_FILE, 'w') as locf:
+        """Rewrites local storage with stored data from disasterApp"""
+        with open(LOCATIONS_FILE, 'w', encoding='utf-8') as locf:
             locf = json.dump(self.locations, locf, indent=4)
-    
-    def initiate_api_cache(self):
-        weather_cache = WeatherAPI.initialize_cache()
-        return weather_cache
 
-    def refresh_api_data(self):
+    def refresh_all_data(self):
+        """Calls all api fetches to update current data
+        
+        This function builds a collated package of all available 
+        locations and sends it to each api method to refresh current
+        stored data
+        """
         api_package = {
             "location": [],
             "radius": [],
@@ -1219,18 +1280,80 @@ class disasterApp:
             "lon": [],
             "timezone": []
         }
+        if not self.locations:
+            messagebox.showinfo(
+                "Syncing Information",
+                "To refresh information shown, please first create a " +
+                "new location to continue"
+            )
+            return
+        
         for location in self.locations.values():
             api_package["location"].append(location["location"])
             api_package["radius"].append(location["radius"])
             api_package["lat"].append(location["coords"][0])
             api_package["lon"].append(location["coords"][1])
             api_package["timezone"].append(location["timezone"])
-        weather_cache = self.initiate_api_cache()
-        self.weather_data = WeatherAPI.get_weather_data(
-            weather_cache,
-            api_package
+
+        self.refresh_weather_api(api_package)
+        self.refresh_earthquake_api(api_package)
+        self.schedule_refresh()
+        self.last_all_refresh = datetime.now().strftime(
+            "%Y-%m-%d %I:%M %p"
         )
+        self.last_refresh_label.config(
+            text=f"Last refreshed at: {self.last_all_refresh}"
+        )
+
+    def get_next_refresh_time(self):
+        """Get next timestamp for cache refresh
         
+        Determines the next available timestamp for an auto refresh to
+        execute based from a offset from the hour
+        """
+        now = datetime.now()
+
+        next_refresh = now.replace(
+            minute=self.refresh_minute,
+            second=0,
+            microsecond=0
+        )
+
+        if next_refresh <= now:
+            next_refresh += timedelta(hours=1)
+        
+        self.next_refresh = next_refresh
+        return next_refresh
+    
+    def schedule_refresh(self):
+        self.next_refresh = self.get_next_refresh_time()
+
+        delay_ms = int(
+            (self.next_refresh - datetime.now()).total_seconds() * 1000
+        )
+
+        self.root.after(
+            delay_ms,
+            self.refresh_all_data
+        )
+
+    def refresh_weather_api(self, package):
+        """Pull information from the WeatherAPI"""
+        hourly_data, daily_data = \
+            WeatherAPI.get_weather_data(
+                self.weather_session,
+                package
+            )
+        
+        self.weather_data = {
+            "hourly": hourly_data,
+            "daily": daily_data
+        }
+        
+        self.update_weather_display()
+    
+    def refresh_earthquake_api(self, package):
+        pass
 
 root = tk.Tk()
 app = disasterApp(
