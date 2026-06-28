@@ -1,4 +1,5 @@
 import tkinter as tk
+
 from tkinter import messagebox
 from tkinter import ttk
 from datetime import datetime, timedelta
@@ -15,6 +16,18 @@ CITIES_FILE = "cities.json"
 LOCATIONS_FILE = "stored_locations.json"
 SYSTEM_FILE = "menu_history.json"
 TF = TimezoneFinder()
+WEATHER_FIELDS = [
+    "temperature_2m",
+    "apparent_temperature",
+    "precipitation_probability",
+    "rain",
+    "cloud_cover",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "wind_gusts_10m",
+    "relative_humidity_2m",
+    "surface_pressure"
+]
 
 if not os.path.exists(LOCATIONS_FILE):
     with open(LOCATIONS_FILE, 'w', encoding='utf-8') as locf:
@@ -61,15 +74,23 @@ class statusIndicator(tk.Canvas):
             bg=bg_colour
         )
 
+        self.status = {
+            "SEVERE_WARNING": "#FF0000",
+            "WARNING": "#FFDD00",
+            "NORMAL": "#00FF00",
+            "INACTIVE": "#9CA3AF"
+        }
+
         self.light = self.create_oval(
             2, 2,
             12, 12,
-            fill="#33FF00",
+            fill="#9CA3AF",
             outline="black"
         )
 
-    def setColour(self, colour):
-        self.itemconfig(self.light, fill=colour)
+    def setColour(self, status):
+        """Set the colour of the StatusIndicator"""
+        self.itemconfig(self.light, fill=self.status[status])
     
 class locationEditFrame(ttk.Frame):
     """Edit menu for editing locationItem details.
@@ -235,10 +256,12 @@ class locationEditFrame(ttk.Frame):
             return
         
         if self.parent.selected_location == self.locationItem.id:
-            self.parent.update_main_display(False)
+            self.parent.selected_location = None
+            self.parent.update_all_display()
 
         self.parent.locations.pop(self.locationItem.id, None)
         self.parent.update_local_storage()
+        self.parent.refresh_all_data()
         self.parent.location_items.pop(self.locationItem.id, None)
         self.locationItem.destroy()
         messagebox.showinfo(
@@ -289,9 +312,10 @@ class locationEditFrame(ttk.Frame):
             text=self.info["location"]
         )
         self.locationItem.radius_label.config(
-            text=f"Radius: {self.info["radius"]}km"
+            text=f"Radius: {self.info['radius']}km"
         )
         self.parent.update_local_storage()
+        self.parent.refresh_all_data()
         self.destroy()
     
     def cancel_changes(self):
@@ -362,14 +386,18 @@ class locationItem(ttk.Frame):
     configuration.
     """
     def __init__(self, frame, parent, id):
-        super().__init__(frame)
+        super().__init__(frame, padding=0, style="InfoBG.TFrame")
         self.parent = parent
         self.id = id
 
-        self.pack(fill="x", expand=False)
+        self.pack(fill="x", padx=5, pady=5, expand=False)
         self.columnconfigure(0, weight=1)
-
-        self.info_frame = ttk.Frame(self, padding=10)
+        
+        self.info_frame = ttk.Frame(
+            self, 
+            padding=10, 
+            style="InfoBG.TFrame"
+        )
         self.info_frame.grid(row=0, column=0, sticky="w")
 
         # Reinstate previous save data if created from existing 
@@ -378,13 +406,15 @@ class locationItem(ttk.Frame):
 
         self.location_label = ttk.Label(
             self.info_frame,
-            text=previous_info["location"]
+            text=previous_info["location"],
+            style="LocationOption.TLabel"
         )
         self.location_label.grid(row=0, column=0, sticky="w")
 
         self.radius_label = ttk.Label(
             self.info_frame,
-            text=f"Radius: {previous_info["radius"]}km"
+            text=f"Radius: {previous_info['radius']}km",
+            style="RadiusOption.TLabel"
         )
         self.radius_label.grid(row=1, column=0, sticky="w")
     
@@ -392,6 +422,7 @@ class locationItem(ttk.Frame):
             self,
             text="Edit",
             width=4,
+            style="EditLocation.TButton",
             command=lambda: self.edit_location(True)
         )
         self.edit_button.grid(row=0, column=1, sticky="e")
@@ -400,6 +431,7 @@ class locationItem(ttk.Frame):
             self,
             text="Select",
             width=6,
+            style="SelectLocation.TButton",
             command=self.select_location
         )
         self.select_button.grid(row=0, column=2, sticky="e", padx=5)
@@ -408,6 +440,10 @@ class locationItem(ttk.Frame):
                 self.parent.locations[id]["radius"] or 
                 self.parent.locations[id]["coords"]):
             self.edit_location(False)
+    
+    def display_self(self):
+        """Show the locationItem"""
+        self.pack(fill="x", expand=False)
 
     def edit_location(self, locationExists):
         """Open a locationEditFrame to edit / remove the location
@@ -430,34 +466,30 @@ class locationItem(ttk.Frame):
             relwidth=1, 
             anchor="center"
         )
+        self.edit_menu.update_idletasks()
     
     def select_location(self):
-        """Sets this locationItem's location as the active location
-        
-        Updates the selected location for the menu to the corresponding
-        locationItem's assigned location, automatically deselecting all
-        other locations when doing so
-        """
+        """Sets this locationItem's location as the active location"""
+        self.parent.set_selected_location(self.id)
+    
+    def select_location_ui_only(self):
+        """Change ui of select button to active"""
         self.select_button.config(text="(Active)")
         self.select_button.state(["disabled"])
-        self.parent.selected_location = self.id
-        self.parent.update_main_display()
-
-        for location in self.parent.location_items.values():
-            if not location == self:
-                location.deselect_location()
   
     def deselect_location(self):
+        """Change ui of select button to inactive"""
         self.select_button.config(text="Select")
         self.select_button.state(["!disabled"])
     
     def refresh_location(self):
+        """Update locationItem info display"""
         data = self.parent.locations[self.id]
         self.location_label.config(
             text=data["location"]
         )
         self.radius_label.config(
-            text=f"Radius: {data["location"]}km"
+            text=f"Radius: {data['location']}km"
         )
 
 class AppCache:
@@ -480,8 +512,8 @@ class disasterApp:
     def __init__(self, root, location_data, system_data):
         self.root = root
         self.root.title("Local Disaster Alert System")
-        self.root.minsize(496, 496)
-        self.root.geometry("600x500+500+0")
+        self.root.minsize(600, 600)
+        self.root.geometry("600x600+500+0")
 
         self.style = ttk.Style()
         self.style.theme_use("clam")
@@ -494,7 +526,7 @@ class disasterApp:
         
         self.locations = {}
         self.location_items = {}
-        self.selected_location = 0
+        self.selected_location = None
 
         if location_data:
             self.locations = location_data
@@ -509,12 +541,18 @@ class disasterApp:
 
         self.weather_data = {}
 
+        self.alert_strings = {
+            "INACTIVE": ["Inactive"],
+            "NORMAL": ["Normal"],
+            "WARNING": ["Warning"],
+            "SEVERE_WARNING": ["Severe", "Severe Warning"]
+        }
         
         self.create_styles()
         self.create_frames()
         self.create_widgets_all()
         self.create_location_menu()
-
+        self.show_home_display()
         self.refresh_all_data()
 
     def create_styles(self):
@@ -533,13 +571,13 @@ class disasterApp:
             foreground="#575757"
         )
         self.style.configure(
-            "Location.TLabel",
-            font=("TkDefaultFont", 18),
+            "CurrentLocation.TLabel",
+            font=("TkDefaultFont", 26),
             background="#F0F0F0"
         )
         self.style.configure(
-            "Radius.TLabel",
-            font=("TkDefaultFont", 10),
+            "CurrentRadius.TLabel",
+            font=("TkDefaultFont", 18),
             background="#F0F0F0"
         )
         self.style.configure(
@@ -561,6 +599,69 @@ class disasterApp:
             font=("TkDefaultFont", 20),
             background="#FFFFFF"
         )
+        self.style.configure(
+            "SubtleBG.TButton",
+            background="#D9D9D9",
+            foreground="#575757",
+            relief="flat",
+            borderwidth=0
+        )
+        self.style.configure(
+            "LocationOption.TLabel",
+            font=("TkDefaultFont", 24),
+            background="#D9D9D9"
+        )
+        self.style.configure(
+            "RadiusOption.TLabel",
+            font=("TkDefaultFont", 14),
+            background="#D9D9D9"
+        )
+        self.style.configure(
+            "EditLocation.TButton",
+            background="#EBEBEB",
+            relief="flat",
+            borderwidth=0
+        )
+        self.style.configure(
+            "SelectLocation.TButton",
+            background="#EBEBEB",
+            relief="flat",
+            borderwidth=0
+        )
+        self.style.configure(
+            "WeatherStatus.TLabel",
+            font=("TkDefaultFont", 18),
+            background="#F0F0F0"
+        )
+        self.style.configure(
+            "WeatherMainCard.TFrame",
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "WeatherSubCard.TFrame",
+            background="#F2F2F2"
+        )
+        self.style.configure(
+            "WeatherMainInfo.TLabel",
+            font=("TkDefaultFont", 12),
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "WeatherRainInfo.TLabel",
+            font=("TkDefaultFont", 12),
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "WeatherCloudInfo.TLabel",
+            font=("TkDefaultFont", 8),
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "WeatherSubInfo.TLabel",
+            font=("TkDefaultFont", 12),
+            background="#F2F2F2",
+            foreground="#555555"
+        )
 
     
     def create_frames(self):
@@ -572,59 +673,100 @@ class disasterApp:
         """
         
         self.main_frame = ttk.Frame(self.root, style="MainBG.TFrame")
+        self.main_frame.pack(fill="both", expand=True)
 
         self.refresh_frame = ttk.Frame(
             self.main_frame, 
             style="MainBG.TFrame"
         )
+        self.refresh_frame.pack(fill="x")
+
         self.location_frame = ttk.Frame(
             self.main_frame, 
             padding=10,
             style="MainBG.TFrame"
         )
+        self.location_frame.pack(fill="both", expand=True)
+        self.location_frame.grid_columnconfigure(1, weight=1)
 
         self.all_status_frame = ttk.Frame(
             self.main_frame, 
-            padding=10,
+            padding=(10, 30),
             style="InfoBG.TFrame"
         )
+        self.all_status_frame.pack(fill="x", expand=True)
+
         self.footer_frame = ttk.Frame(
             self.main_frame, 
             style="MainBG.TFrame"
         )
+        self.footer_frame.pack(
+            side=tk.BOTTOM, 
+            fill="both",
+            expand=True,
+            pady=(0, 5)
+        )
 
         # All frames for Weather-specific window
-        self.weather_frame = ttk.Frame(self.main_frame)
+        self.weather_frame = ttk.Frame(
+            self.main_frame,
+            style="MainBG.TFrame"
+        )
 
         self.w_status_frame =ttk.Frame(
-            self.weather_frame, padding=10
+            self.weather_frame, 
+            style="MainBG.TFrame"
         )
         self.w_status_frame.pack()
 
         self.w_info_container = ttk.Frame(
-            self.weather_frame, padding=10
+            self.weather_frame, 
+            style="InfoBG.TFrame"
         )
-        self.w_info_container.pack()
+        self.w_info_container.pack(fill="both", expand=False)
 
         self.w_info_row1 = ttk.Frame(
-            self.w_info_container, padding=10
+            self.w_info_container, 
+            style="InfoBG.TFrame"
         )
-        self.w_info_row1.pack()
+        self.w_info_row1.pack(
+            fill="both", 
+            expand=True,
+            pady=(15, 5),
+            padx=2
+        )
+        self.w_info_row1.columnconfigure([0, 2], weight=1)
+        self.w_info_row1.columnconfigure(1, weight=2)
 
         self.w_info_row2 = ttk.Frame(
-            self.w_info_container, padding=10
+            self.w_info_container, 
+            style="InfoBG.TFrame"
         )
-        self.w_info_row2.pack()
+        self.w_info_row2.pack(
+            fill="both", 
+            expand=True,
+            pady=(5, 15),
+            padx=2
+        )
+        self.w_info_row2.columnconfigure([0, 1, 2, 3], weight=1)
 
         self.w_info_sunCol = ttk.Frame(
-            self.w_info_row1, padding=10
+            self.w_info_row1, 
+            style="InfoBG.TFrame"
         )
-        self.w_info_sunCol.grid(row=0, column=0)
+        self.w_info_sunCol.grid(row=0, column=0, sticky="nsew")
+        self.w_info_sunCol.rowconfigure(0, weight=1)
+        self.w_info_sunCol.rowconfigure(1, weight=1)
+        self.w_info_sunCol.columnconfigure(0, weight=1)
 
         self.w_info_rainCol = ttk.Frame(
-            self.w_info_row1, padding=10
+            self.w_info_row1, 
+            style="InfoBG.TFrame"
         )
-        self.w_info_rainCol.grid(row=0, column=2)
+        self.w_info_rainCol.grid(row=0, column=2, sticky="nsew")
+        self.w_info_rainCol.rowconfigure(0, weight=1)
+        self.w_info_rainCol.rowconfigure(1, weight=1)
+        self.w_info_rainCol.columnconfigure(0, weight=1)
         
         # All frames for flood-specific window
         self.flood_frame = ttk.Frame(self.main_frame)
@@ -665,19 +807,9 @@ class disasterApp:
         )
         self.q_status_container.columnconfigure(1, weight=1)
         self.q_status_container.grid(row=0, column=0, sticky="nw")
-        
-        self.main_frame.pack(fill="both", expand=True)
-        self.refresh_frame.pack(fill="x")
-        self.location_frame.pack(fill="x", expand=False)
-        self.location_frame.grid_columnconfigure(1, weight=1)
-        self.all_status_frame.pack(fill="x", expand=True)
-        self.footer_frame.pack(
-            side=tk.BOTTOM, 
-            fill="both", 
-            expand=True,
-        )
 
     def create_widgets_all(self):
+        """Run all create_widget methods in disasterApp"""
         self.create_widgets_main()
         self.create_widgets_weather()
         self.create_widgets_flood()
@@ -701,9 +833,9 @@ class disasterApp:
         # Current Location Display
         self.current_location_label = ttk.Label(
             self.location_frame,
-            text=f"Current Location: Not Selected",
+            text="Current Location: Not Selected",
             padding=(10, 0),
-            style="Location.TLabel"
+            style="CurrentLocation.TLabel"
         )
         self.current_location_label.grid(row=0, column=0)
 
@@ -718,9 +850,9 @@ class disasterApp:
         
         self.search_radius_label = ttk.Label(
             self.location_frame,
-            text=f"Radius: Not Selected",
+            text="Radius: Not Selected",
             padding=(10, 0),
-            style="Radius.TLabel"
+            style="CurrentRadius.TLabel"
         )
         self.search_radius_label.grid(row=1, column=0, sticky="w")
 
@@ -755,7 +887,7 @@ class disasterApp:
 
         self.all_status_w_label = ttk.Label(
             self.all_status_row1,
-            text="Weather: Normal",
+            text="Weather: Inactive",
             padding=10,
             style="AllStatusText.TLabel"
         )
@@ -798,7 +930,7 @@ class disasterApp:
 
         self.all_status_f_label = ttk.Label(
             self.all_status_row2,
-            text="Flood Risk: Low",
+            text="Flood Risk: Inactive",
             padding=10,
             style="AllStatusText.TLabel"
         )
@@ -841,7 +973,7 @@ class disasterApp:
 
         self.all_status_q_label = ttk.Label(
             self.all_status_row3,
-            text="Earthquake Alert: Low",
+            text="Earthquake Alert: Inactive",
             padding=10,
             style="AllStatusText.TLabel"
         )
@@ -866,14 +998,15 @@ class disasterApp:
         self.back_home_button = ttk.Button(
             self.footer_frame,
             text="Back home",
-            padding=5,
+            padding=(0, 8),
+            style="MainBG.TButton",
             command=self.show_home_display
         )
 
         self.all_sync_button = ttk.Button(
             self.footer_frame, 
             text="Sync from Servers", 
-            padding=5,
+            padding=(10, 8),
             style="MainBG.TButton",
             command=self.refresh_all_data
         )
@@ -900,8 +1033,9 @@ class disasterApp:
         
         self.weather_status_message = ttk.Label(
             self.w_status_frame,
-            text="Weather Status: Normal",
-            padding=10
+            text="Weather Status: Inactive",
+            padding=10,
+            style="WeatherStatus.TLabel"
         )
         self.weather_status_message.grid(
             row=0, 
@@ -911,68 +1045,189 @@ class disasterApp:
         )
 
         # Weather Information (From API)
+        self.weather_sunrise_card = ttk.Frame(
+            self.w_info_sunCol,
+            padding=(6, 3),
+            style="WeatherMainCard.TFrame"
+        )
+        self.weather_sunrise_card.grid(
+            row=0, 
+            column=0, 
+            sticky="nsew",
+            pady=(0, 3),
+            padx=(10, 5)
+        )
         self.weather_sunrise_label = ttk.Label(
-            self.w_info_sunCol,
-            text="Sunrise: 7:15am",
-            padding=[0, 10]
+            self.weather_sunrise_card,
+            text="Sunrise: --",
+            style="WeatherMainInfo.TLabel",
+            anchor="center",
+            justify="center"
         )
-        self.weather_sunrise_label.grid(row=0, column=0)
+        self.weather_sunrise_label.pack(expand=True)
 
+        self.weather_sunset_card = ttk.Frame(
+            self.w_info_sunCol,
+            padding=(6, 3),
+            style="WeatherMainCard.TFrame"
+        )
+        self.weather_sunset_card.grid(
+            row=1, 
+            column=0, 
+            sticky="nsew",
+            pady=(3, 0),
+            padx=(10, 5)
+        )
         self.weather_sunset_label = ttk.Label(
-            self.w_info_sunCol,
-            text="Sunset: 6:50pm",
-            padding=[0, 10]
+            self.weather_sunset_card,
+            text="Sunset: --",
+            style="WeatherMainInfo.TLabel",
+            anchor="center",
+            justify="center"
         )
-        self.weather_sunset_label.grid(row=1, column=0)
+        self.weather_sunset_label.pack(expand=True)
 
-        self.weather_temp_label = ttk.Label(
+        self.weather_temp_card = ttk.Frame(
             self.w_info_row1,
-            text="Current Temperature: 18℃\n\n(feels like: 14℃)",
-            padding=10
+            padding=(5, 0),
+            style="WeatherMainCard.TFrame"
         )
-        self.weather_temp_label.grid(row=0, column=1)
+        self.weather_temp_card.grid(
+            row=0, 
+            column=1,
+            rowspan=1, 
+            sticky="nsew",
+            padx=5
+        )
+        self.weather_temp_label = ttk.Label(
+            self.weather_temp_card,
+            text="Current Temperature: --℃\n\nfeels like: --℃",
+            padding=15,
+            style="WeatherMainInfo.TLabel",
+            anchor="center",
+            justify="center"
+        )
+        self.weather_temp_label.pack(expand=True)
 
+        self.weather_rain_card = ttk.Frame(
+            self.w_info_rainCol,
+            padding=(6, 3),
+            style="WeatherMainCard.TFrame"
+        )
+        self.weather_rain_card.grid(
+            row=0, 
+            column=0, 
+            sticky="nsew",
+            padx=(5, 10)
+        )
         self.weather_rain_chance_label = ttk.Label(
-            self.w_info_rainCol,
-            text="Chance of Rain:\n20%",
-            padding=10
+            self.weather_rain_card,
+            text="Chance of Rain:\n--%",
+            style="WeatherRainInfo.TLabel",
+            anchor="center",
+            justify="center"
         )
-        self.weather_rain_chance_label.grid(row=0, column=0)
+        self.weather_rain_chance_label.pack(expand=True)
 
+        self.weather_cloud_card = ttk.Frame(
+            self.w_info_rainCol,
+            padding=(6, 3),
+            style="WeatherMainCard.TFrame"
+        )
+        self.weather_cloud_card.grid(
+            row=1, 
+            column=0, 
+            sticky="nsew",
+            padx=(5, 10)
+        )
         self.weather_cloud_cover_label = ttk.Label(
-            self.w_info_rainCol,
-            text="40% Cloud Cover",
-            padding=[0, 10]
+            self.weather_cloud_card,
+            text="--% Cloud Cover",
+            style="WeatherCloudInfo.TLabel",
+            anchor="center",
+            justify="center"
         )
-        self.weather_cloud_cover_label.grid(row=1, column=0)
+        self.weather_cloud_cover_label.pack(expand=True)
 
-        self.weather_wind_speed_label = ttk.Label(
+        self.weather_wind_speeds_card = ttk.Frame(
             self.w_info_row2,
-            text="Wind Speeds: \n10km/h",
-            padding=10
+            padding=10,
+            style="WeatherSubCard.TFrame"
         )
-        self.weather_wind_speed_label.grid(row=0, column=0)
+        self.weather_wind_speeds_card.grid(
+            row=0, 
+            column=0, 
+            sticky="nsew", 
+            padx=(10, 5)
+        )
+        self.weather_wind_speeds_label = ttk.Label(
+            self.weather_wind_speeds_card,
+            text="Wind Speeds: \n--km/h",
+            style="WeatherSubInfo.TLabel",
+            anchor="center",
+            justify="center"
+        )
+        self.weather_wind_speeds_label.pack(expand=True)
         
+        self.weather_wind_gusts_card = ttk.Frame(
+            self.w_info_row2,
+            padding=10,
+            style="WeatherSubCard.TFrame"
+        )
+        self.weather_wind_gusts_card.grid(
+            row=0, 
+            column=1,
+            sticky="nsew",
+            padx=5
+        )
         self.weather_wind_gusts_label = ttk.Label(
-            self.w_info_row2,
-            text="Wind Gusts: \n10km/h",
-            padding=10
+            self.weather_wind_gusts_card,
+            text="Wind Gusts: \n--km/h",
+            style="WeatherSubInfo.TLabel",
+            anchor="center",
+            justify="center"
         )
-        self.weather_wind_gusts_label.grid(row=0, column=1)
+        self.weather_wind_gusts_label.pack(expand=True)
 
+        self.weather_humidity_card = ttk.Frame(
+            self.w_info_row2,
+            padding=10,
+            style="WeatherSubCard.TFrame"
+        )
+        self.weather_humidity_card.grid(
+            row=0,
+            column=2,
+            sticky="nsew",
+            padx=5
+        )
         self.weather_humidity_label = ttk.Label(
-            self.w_info_row2,
-            text="Humidity: \n85%",
-            padding=10
+            self.weather_humidity_card,
+            text="Humidity: \n--%",
+            style="WeatherSubInfo.TLabel",
+            anchor="center",
+            justify="center"
         )
-        self.weather_humidity_label.grid(row=0, column=2)
+        self.weather_humidity_label.pack(expand=True)
         
-        self.weather_surface_pressure_label = ttk.Label(
+        self.weather_surface_pressure_card = ttk.Frame(
             self.w_info_row2,
-            text="Surface Pressure: \n1013hPa",
-            padding=10
+            padding=10,
+            style="WeatherSubCard.TFrame"
         )
-        self.weather_surface_pressure_label.grid(row=0, column=3)
+        self.weather_surface_pressure_card.grid(
+            row=0, 
+            column=3,
+            sticky="nsew",
+            padx=(5, 10)
+        )
+        self.weather_surface_pressure_label = ttk.Label(
+            self.weather_surface_pressure_card,
+            text="Surface Pressure: \n--hPa",
+            style="WeatherSubInfo.TLabel",
+            anchor="center",
+            justify="center"
+        )
+        self.weather_surface_pressure_label.pack(expand=True)
 
     def create_widgets_flood(self):
         """Creates the widgets for the Flood GUI
@@ -998,7 +1253,7 @@ class disasterApp:
 
         self.flood_status_message = ttk.Label(
             self.f_status_container,
-            text="Flood Risk: Low"
+            text="Flood Risk: Inactive"
         )
         self.flood_status_message.grid(row=0, column=1, padx=10)
 
@@ -1065,7 +1320,7 @@ class disasterApp:
 
         self.earthquake_status_message = ttk.Label(
             self.q_status_container,
-            text="Earthquake Activity: \nLow"
+            text="Earthquake Activity: \nInactive"
         )
         self.earthquake_status_message.grid(row=0, column=1, padx=10)
 
@@ -1116,7 +1371,7 @@ class disasterApp:
         self.weather_frame.pack(fill="x", expand=True)
         self.flood_frame.pack_forget()
         self.earthquake_frame.pack_forget()
-        self.back_home_button.pack(side="left")
+        self.back_home_button.pack(side="left", padx=10)
 
     def show_flood_display(self):
         """Updates disasterApp view to show flood info"""
@@ -1124,7 +1379,7 @@ class disasterApp:
         self.weather_frame.pack_forget()
         self.flood_frame.pack(fill="x", expand=True)
         self.earthquake_frame.pack_forget()
-        self.back_home_button.pack(side="left")
+        self.back_home_button.pack(side="left", padx=10)
     
     def show_earthquake_display(self):
         """Updates disasterApp view to show earthquake info"""
@@ -1132,19 +1387,21 @@ class disasterApp:
         self.weather_frame.pack_forget()
         self.flood_frame.pack_forget()
         self.earthquake_frame.pack(fill="x", expand=True)
-        self.back_home_button.pack(side="left")
+        self.back_home_button.pack(side="left", padx=10)
     
     def create_location_menu(self):
         """Initiates the disasterApp location menu popup"""
         self.location_popup_menu = ttk.Frame(
             self.root,
             borderwidth=3,
-            relief="groove"
+            relief="groove",
+            style="MainBG.TFrame"
         )
 
         self.location_popup_list = ttk.Frame(
             self.location_popup_menu,
-            padding=10
+            padding=10,
+            style="MainBG.TFrame"
         )
         self.location_popup_list.pack(fill="both", expand=True)
         self.location_popup_list.propagate(False)
@@ -1152,7 +1409,9 @@ class disasterApp:
         self.close_location_menu_button = ttk.Button(
             self.location_popup_menu,
             text="Close",
-            padding=(0, 10),
+            padding=5,
+            width=6,
+            style="SubtleBG.TButton",
             command=self.location_popup_menu.place_forget
         )
         self.close_location_menu_button.pack(side="left", padx=5)
@@ -1160,7 +1419,8 @@ class disasterApp:
         self.new_location_button = ttk.Button(
             self.location_popup_menu,
             text="New Location",
-            padding=10,
+            padding=5,
+            style="SubtleBG.TButton",
             command=self.create_location
         )
         self.new_location_button.place(relx=0.5, rely=1, anchor="s")
@@ -1182,7 +1442,6 @@ class disasterApp:
                         self,
                         id
                     )
-        
         self.location_popup_menu.place(
             relx=0.5, 
             rely=0.5, 
@@ -1190,6 +1449,7 @@ class disasterApp:
             relheight=0.9,
             relwidth=0.9
         )
+        self.location_popup_menu.update_idletasks()
     
     def create_location(self):
         """Creates a new location
@@ -1197,7 +1457,7 @@ class disasterApp:
         This method initiates a blank location item in the disasterApp
         and assigns a locationItem to it
         """
-        id = self.nextid
+        id = f"{self.nextid}"
         self.nextid += 1
         self.locations[id] = {
             "location": "",
@@ -1211,19 +1471,44 @@ class disasterApp:
             self, 
             id
         )
+
+    def set_selected_location(self, new_id):
+        """Activates the selected location and deselect other locations
+        
+        :param new_id: The id of the new selected location
+        """
+        if self.selected_location is not None:
+            old = self.location_items.get(self.selected_location)
+            if old:
+                old.deselect_location()
+
+        self.selected_location = f"{new_id}"
+
+        new = self.location_items.get(new_id)
+        if new:
+            new.select_location_ui_only()
+
+        self.update_all_display()
     
-    def update_main_display(self, location=True):
+    def update_all_display(self):
+        """Run all update_display methods"""
+        self.update_main_display()
+        self.update_weather_display()
+        self.update_flood_display()
+        self.update_earthquake_display()
+
+    def update_main_display(self):
         """Update the disasterApp display"""
-        if location:
+        if self.selected_location:
             location_info = self.locations[self.selected_location]
 
             self.current_location_label.config(
-                text=f"Current Location:\n{location_info["location"]}",
+                text=f"Current Location:\n{location_info['location']}",
                 wraplength=self.current_location_label.winfo_width()
             )
 
             self.search_radius_label.config(
-                text=f"Radius: {location_info["radius"]}km"
+                text=f"Radius: {location_info['radius']}km"
             )
         else:
             self.current_location_label.config(
@@ -1233,33 +1518,133 @@ class disasterApp:
             self.search_radius_label.config(
                 text=f"Radius: Not Selected"
             )
+
+    def weather_alert(self, upcoming_hours_data):
+        if upcoming_hours_data == {}:
+            level = "INACTIVE"
+        else:
+            if (
+                upcoming_hours_data["wind_gusts_10m"] >= 100 or
+                upcoming_hours_data["rain"] >= 50
+            ):
+                level = "SEVERE_WARNING"
+            elif (
+                upcoming_hours_data["wind_gusts_10m"] >= 70 or
+                upcoming_hours_data["rain"] >= 20
+            ):
+                level = "WARNING"
+            else:
+                level = "NORMAL"
+        
+        self.all_status_w_indicator.setColour(level)
+        self.all_status_w_label.config(
+            text=f"Weather: {self.alert_strings[level][0]}"
+        )
+        self.weather_status_indicator.setColour(level)
+        self.weather_status_message.config(
+            text=f"Weather Status: {self.alert_strings[level][-1]}"
+        )
+
+    def get_wind_direction(self, degrees):
+        """Get relative wind direction based of compass degrees
+        
+        :param degrees: a float point value from 0 to 360 degrees
+        """
+        directions = [
+            "N", "NNE", "NE", "ENE",
+            "E", "ESE", "SE", "SSE",
+            "S", "SSW", "SW", "WSW",
+            "W", "WNW", "NW", "NNW"
+        ]
+
+        index = round(degrees / 22.5) % 16
+        return directions[index]
+
+    def round_weather_data(self, hour_data):
+        """Round all of the weather api data"""
+        for key, value in hour_data.items():
+            hour_data[key] = round(value)
+        return hour_data
+        
         
     def update_weather_display(self):
-        location_key = self.locations[self.selected_location]
-        timestamps = self.weather_data["hourly"][location_key].keys()
-        hour_data = self.weather_data["hourly"][location_key].values()
-        daily_data = self.weather_data["daily"][location_key]
+        """Updates the weather specific display"""
+        if self.selected_location:
+            location_key = self.locations[
+                f"{self.selected_location}"]["location"]
+            
+            timestamps = self.weather_data[
+                "hourly"][location_key].keys()
+            timestamps = list(timestamps)
+
+            hour_data = self.weather_data[
+                "hourly"][location_key].values()
+            
+            upcoming_hours_data = zip(timestamps[:24], hour_data[:24])
+
+            hour_data = list(hour_data)[0]
+
+            degrees = hour_data["wind_direction_10m"]
+            wind_direction = self.get_wind_direction(degrees)
+
+            hour_data = self.round_weather_data(hour_data)
+
+            daily_data = self.weather_data[
+                "daily"][location_key]
+        else:
+            hour_data = {key: "--" for key in WEATHER_FIELDS}
+            wind_direction = ""
+            daily_data = {
+                "sunrise": "--",
+                "sunset": "--"
+            }
+            upcoming_hours_data = {}
+        
+        self.weather_alert(upcoming_hours_data)
 
         self.weather_sunrise_label.config(
-            text=f"Sunrise: {daily_data["sunrise"]}"
+            text=f"Sunrise: {daily_data['sunrise']}"
         )
         self.weather_sunset_label.config(
-            text=f"Sunset: {daily_data["sunset"]}"
+            text=f"Sunset: {daily_data['sunset']}"
         )
 
         self.weather_temp_label.config(
             text="Current Temperature: " + 
-            f"{round(hour_data[0]["temperature_2m"])}℃\n\n" + 
-            "(feels like: " + 
-            f"{round(hour_data[0]["apparent_temperature"])}℃)"
+            f"{hour_data['temperature_2m']}℃\n\n" + 
+            f"feels like: {hour_data['apparent_temperature']}℃"
         )
         self.weather_rain_chance_label.config(
             text="Chance of Rain: \n" + 
-            f"{round(hour_data[0]["precipitation_probability"])}%"
+            f"{hour_data['precipitation_probability']}%"
         )
         self.weather_cloud_cover_label.config(
-            text=f"{hour_data[0]["cloud_cover"]}"
+            text=f"{hour_data['cloud_cover']}% Cloud cover"
         )
+
+        self.weather_wind_speeds_label.config(
+            text="Wind Speeds:\n" +
+            f"{hour_data['wind_speed_10m']}km/h {wind_direction}"
+        )
+        self.weather_wind_gusts_label.config(
+            text="Wind Gusts:\n" +
+            f"{hour_data['wind_gusts_10m']}km/h"
+        )
+
+        self.weather_humidity_label.config(
+            text="Humidity:\n" + 
+            f"{hour_data['relative_humidity_2m']}%"
+        )
+        self.weather_surface_pressure_label.config(
+            text="Surface Pressure:\n" + 
+            f"{hour_data['surface_pressure']}hPa"
+        )
+    
+    def update_flood_display(self):
+        pass
+
+    def update_earthquake_display(self):
+        pass
     
     def update_local_storage(self):
         """Rewrites local storage with stored data from disasterApp"""
@@ -1283,8 +1668,7 @@ class disasterApp:
         if not self.locations:
             messagebox.showinfo(
                 "Syncing Information",
-                "To refresh information shown, please first create a " +
-                "new location to continue"
+                "Create a new location to refresh information shown"
             )
             return
         
@@ -1342,7 +1726,8 @@ class disasterApp:
         hourly_data, daily_data = \
             WeatherAPI.get_weather_data(
                 self.weather_session,
-                package
+                package, 
+                WEATHER_FIELDS
             )
         
         self.weather_data = {

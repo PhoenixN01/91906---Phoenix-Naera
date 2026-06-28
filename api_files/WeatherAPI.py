@@ -32,14 +32,14 @@ def initialize_cache():
 	)
 	return retry_session
 
-def get_weather_data(session, package):
+def get_weather_data(session, package, fields):
 	openmeteo = openmeteo_requests.Client(session = session)
 	url = "https://api.open-meteo.com/v1/forecast"
 	params = {
 		"latitude": package["lat"],
 		"longitude": package["lon"],
 		"daily": ["sunrise", "sunset"],
-		"hourly": WEATHER_FIELDS,
+		"hourly": fields,
 		"timezone": package["timezone"]
 	}
 	responses = openmeteo.weather_api(url, params = params)
@@ -48,12 +48,8 @@ def get_weather_data(session, package):
 	all_daily_data = {}
 
 	for n in range(len(package["location"])):
-		# Process first location. Add a for-loop for multiple locations or weather models
+		# Process each location
 		response = responses[n]
-		# print(f"Coordinates: {response.Latitude()}°N {response.Longitude()}°E")
-		# print(f"Elevation: {response.Elevation()} m asl")
-		# print(f"Timezone: {response.Timezone()}{response.TimezoneAbbreviation()}")
-		# print(f"Timezone difference to GMT+0: {response.UtcOffsetSeconds() / 3600}hrs")
 
 		# Process hourly data.
 		hourly = response.Hourly()
@@ -124,13 +120,14 @@ locations["timezone"] = [timezone_name]
 
 hourly_weather, daily_data = get_weather_data(
 	session, 
-	locations
+	locations,
+	WEATHER_FIELDS
 )
 
-print("\nHourly Weather:")
-print(json.dumps(hourly_weather, indent=4))
+# print("\nHourly Weather:")
+# print(json.dumps(hourly_weather, indent=4))
 
-print("\nDaily Data:")
-print(json.dumps(daily_data, indent=4))
+# print("\nDaily Data:")
+# print(json.dumps(daily_data, indent=4))
 
-print(hourly_weather.keys())
+# print(hourly_weather.keys())

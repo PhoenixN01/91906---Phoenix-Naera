@@ -7,5 +7,23 @@
             174.7631803
         ],
         "timezone": "Pacific/Auckland"
+    },
+    "1": {
+        "location": "South Taranaki District, New Zealand",
+        "radius": 10,
+        "coords": [
+            -39.5209891,
+            174.4506861
+        ],
+        "timezone": "Pacific/Auckland"
+    },
+    "2": {
+        "location": "Suffolk County, United States",
+        "radius": 10,
+        "coords": [
+            40.8832318,
+            -72.8578027
+        ],
+        "timezone": "America/New_York"
     }
 }
