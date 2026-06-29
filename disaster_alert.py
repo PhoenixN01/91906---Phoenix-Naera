@@ -28,6 +28,35 @@ WEATHER_FIELDS = [
     "relative_humidity_2m",
     "surface_pressure"
 ]
+FLOOD_FIELDS = [
+    "precipitation_probability",
+    "rain",
+    "soil_moisture_0_to_1cm",
+    "soil_moisture_1_to_3cm",
+    "soil_moisture_3_to_9cm"
+]
+FLOOD_SCORES = [
+    ("Soil_index", [(90, 3), (75, 2)]),
+    ("rain_1h", [(30, 3), (15, 2)]),
+    ("rain_6h", [(70, 3), (40, 2)]),
+    ("rain_24h", [(80, 3), (40, 2)]),
+    ("rain_probability", [(95, 2), (80, 1)])
+]
+WEATHER_API_PARAMETERS = [
+    "temperature_2m",
+    "apparent_temperature",
+    "precipitation_probability",
+    "rain",
+    "cloud_cover",
+    "wind_speed_10m",
+    "wind_direction_10m",
+    "wind_gusts_10m",
+    "relative_humidity_2m",
+    "surface_pressure",
+    "soil_moisture_0_to_1cm",
+    "soil_moisture_1_to_3cm",
+    "soil_moisture_3_to_9cm"
+]
 
 if not os.path.exists(LOCATIONS_FILE):
     with open(LOCATIONS_FILE, 'w', encoding='utf-8') as locf:
@@ -540,6 +569,7 @@ class disasterApp:
         # self.earthquake_log = EarthquakeAPI.initialize_log()
 
         self.weather_data = {}
+        self.flood_data = {}
 
         self.alert_strings = {
             "INACTIVE": ["Inactive"],
@@ -1723,20 +1753,24 @@ class disasterApp:
 
     def refresh_weather_api(self, package):
         """Pull information from the WeatherAPI"""
-        hourly_data, daily_data = \
+        raw_hourly_data, daily_data = \
             WeatherAPI.get_weather_data(
                 self.weather_session,
                 package, 
-                WEATHER_FIELDS
+                WEATHER_API_PARAMETERS
             )
         
-        self.weather_data = {
-            "hourly": hourly_data,
-            "daily": daily_data
-        }
+        self.weather_data["daily"] = daily_data
+
+        for timestamp, data in raw_hourly_data.items():
+            for key, value in data.items():
+                if key in WEATHER_FIELDS:
+                    self.weather_data["hourly"][timestamp][key] = value
+                if key in FLOOD_FIELDS:
+                    self.flood_data[timestamp][key] = value
         
         self.update_weather_display()
-    
+
     def refresh_earthquake_api(self, package):
         pass
 
