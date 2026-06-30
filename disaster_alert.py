@@ -16,6 +16,7 @@ CITIES_FILE = "cities.json"
 LOCATIONS_FILE = "stored_locations.json"
 SYSTEM_FILE = "menu_history.json"
 TF = TimezoneFinder()
+
 WEATHER_FIELDS = [
     "temperature_2m",
     "apparent_temperature",
@@ -36,11 +37,11 @@ FLOOD_FIELDS = [
     "soil_moisture_3_to_9cm"
 ]
 FLOOD_SCORES = [
-    ("Soil_index", [(90, 3), (75, 2)]),
+    ("soil_saturation", [(90, 3), (75, 2)]),
     ("rain_1h", [(30, 3), (15, 2)]),
     ("rain_6h", [(70, 3), (40, 2)]),
     ("rain_24h", [(80, 3), (40, 2)]),
-    ("rain_probability", [(95, 2), (80, 1)])
+    ("rain_chance", [(95, 2), (80, 1)]),
 ]
 WEATHER_API_PARAMETERS = [
     "temperature_2m",
@@ -515,10 +516,11 @@ class locationItem(ttk.Frame):
         """Update locationItem info display"""
         data = self.parent.locations[self.id]
         self.location_label.config(
-            text=data["location"]
+            text=data["location"],
+            wraplength=self.location_label.winfo_width()
         )
         self.radius_label.config(
-            text=f"Radius: {data['location']}km"
+            text=f"Radius: {data["radius"]}km"
         )
 
 class AppCache:
@@ -602,12 +604,12 @@ class disasterApp:
         )
         self.style.configure(
             "CurrentLocation.TLabel",
-            font=("TkDefaultFont", 26),
+            font=("TkDefaultFont", 24),
             background="#F0F0F0"
         )
         self.style.configure(
             "CurrentRadius.TLabel",
-            font=("TkDefaultFont", 18),
+            font=("TkDefaultFont", 15),
             background="#F0F0F0"
         )
         self.style.configure(
@@ -638,12 +640,12 @@ class disasterApp:
         )
         self.style.configure(
             "LocationOption.TLabel",
-            font=("TkDefaultFont", 24),
+            font=("TkDefaultFont", 16),
             background="#D9D9D9"
         )
         self.style.configure(
             "RadiusOption.TLabel",
-            font=("TkDefaultFont", 14),
+            font=("TkDefaultFont", 12),
             background="#D9D9D9"
         )
         self.style.configure(
@@ -815,8 +817,12 @@ class disasterApp:
         self.f_status_container = ttk.Frame(
             self.f_info_container, padding=10
         )
-        self.f_status_container.columnconfigure(1, weight=1)
-        self.f_status_container.grid(row=0, column=0, sticky="nw")
+        self.f_status_container.grid(row=0, column=0, sticky="nsew")
+
+        self.f_details_container = ttk.Frame(
+            self.f_info_container, padding=10
+        )
+        self.f_details_container.grid(row=0, column=1, sticky="nsew")
         
         # All frames for earthquake-specific window
         self.earthquake_frame = ttk.Frame(self.main_frame)
@@ -1294,37 +1300,41 @@ class disasterApp:
         )
         self.flood_status_description.grid(row=1, column=0)
 
-        self.flood_rainfall_activity = ttk.Treeview(
-            self.f_info_container,
-            columns=("Datetime", "Rainfall", "Change")
+        self.flood_conditions_label = ttk.Label(
+            self.f_details_container,
+            text="Current Flood Conditions\n",
         )
-        self.flood_rainfall_activity.column(
-            "#0", width=0, stretch=tk.NO
+        self.flood_conditions_label.grid(row=0, column=0, sticky="nsew")
+        
+        self.flood_ground_sat_label = ttk.Label(
+            self.f_details_container,
+            text="Ground Saturation \t--",
         )
-        self.flood_rainfall_activity.column(
-            "Datetime", width=130, anchor=tk.E
+        self.flood_ground_sat_label.grid(row=1, column=0, sticky="nsew")
+
+        self.flood_rain_1hr_label = ttk.Label(
+            self.f_details_container,
+            text="Current Rainfall \t--mm/h",
         )
-        self.flood_rainfall_activity.column(
-            "Rainfall", width=100, anchor=tk.CENTER
+        self.flood_rain_1hr_label.grid(row=2, column=0, sticky="nsew")
+
+        self.flood_rain_6hr_label = ttk.Label(
+            self.f_details_container,
+            text="6-hour Forecast \t--mm",
         )
-        self.flood_rainfall_activity.column(
-            "Change", width=100, anchor=tk.W
+        self.flood_rain_6hr_label.grid(row=3, column=0, sticky="nsew")
+
+        self.flood_rain_24hr_label = ttk.Label(
+            self.f_details_container,
+            text="24-hour Rainfall \t--mm"
         )
-        self.flood_rainfall_activity.heading(
-            "Datetime", text="Date & Time"
+        self.flood_rain_24hr_label.grid(row=4, column=0, sticky="nsew")
+
+        self.flood_rain_prob_label = ttk.Label(
+            self.f_details_container,
+            text="Rain Probability \t--%"
         )
-        self.flood_rainfall_activity.heading(
-            "Rainfall", text="Rainfall"
-        )
-        self.flood_rainfall_activity.heading(
-            "Change", text="Change"
-        )
-        self.flood_rainfall_activity.grid(
-            row=0, 
-            column=1, 
-            rowspan=1,
-            sticky="e"
-        )
+        self.flood_rain_prob_label.grid(row=5, column=0, sticky="nsew")
 
     def create_widgets_earthquake(self):
         """Creates the widgets for the Earthquake GUI
@@ -1549,18 +1559,30 @@ class disasterApp:
                 text=f"Radius: Not Selected"
             )
 
-    def weather_alert(self, upcoming_hours_data):
-        if upcoming_hours_data == {}:
+    def weather_alert(self, upcoming_weather_data):
+        if upcoming_weather_data == {}:
             level = "INACTIVE"
         else:
+            worst_timestamp = None
+            worst_data = None
+            highest_score = -1
+            for timestamp, hour in upcoming_weather_data:
+                score = max(
+                    hour["wind_gusts_10m"],
+                    hour["rain"]
+                )
+                if score > highest_score:
+                    highest_score = score
+                    worst_timestamp = timestamp
+                    worst_data = hour
             if (
-                upcoming_hours_data["wind_gusts_10m"] >= 100 or
-                upcoming_hours_data["rain"] >= 50
+                worst_data["wind_gusts_10m"] >= 60 or
+                worst_data["rain"] >= 10
             ):
                 level = "SEVERE_WARNING"
             elif (
-                upcoming_hours_data["wind_gusts_10m"] >= 70 or
-                upcoming_hours_data["rain"] >= 20
+                worst_data["wind_gusts_10m"] >= 40 or
+                worst_data["rain"] >= 5
             ):
                 level = "WARNING"
             else:
@@ -1593,7 +1615,8 @@ class disasterApp:
     def round_weather_data(self, hour_data):
         """Round all of the weather api data"""
         for key, value in hour_data.items():
-            hour_data[key] = round(value)
+            if isinstance(value, (float, int)):
+                hour_data[key] = round(value)
         return hour_data
         
         
@@ -1603,16 +1626,19 @@ class disasterApp:
             location_key = self.locations[
                 f"{self.selected_location}"]["location"]
             
-            timestamps = self.weather_data[
-                "hourly"][location_key].keys()
-            timestamps = list(timestamps)
-
-            hour_data = self.weather_data[
-                "hourly"][location_key].values()
+            timestamps = list(
+                self.weather_data["hourly"][location_key].keys()
+            )
+            hour_data = list(
+                self.weather_data["hourly"][location_key].values()
+            )
             
-            upcoming_hours_data = zip(timestamps[:24], hour_data[:24])
+            upcoming_weather_data = list(zip(
+                timestamps[:24], 
+                hour_data[:24]
+            ))
 
-            hour_data = list(hour_data)[0]
+            hour_data = hour_data[0]
 
             degrees = hour_data["wind_direction_10m"]
             wind_direction = self.get_wind_direction(degrees)
@@ -1628,9 +1654,9 @@ class disasterApp:
                 "sunrise": "--",
                 "sunset": "--"
             }
-            upcoming_hours_data = {}
+            upcoming_weather_data = {}
         
-        self.weather_alert(upcoming_hours_data)
+        self.weather_alert(upcoming_weather_data)
 
         self.weather_sunrise_label.config(
             text=f"Sunrise: {daily_data['sunrise']}"
@@ -1670,7 +1696,115 @@ class disasterApp:
             f"{hour_data['surface_pressure']}hPa"
         )
     
+    def calculate_flood_points(self, data, thresholds):
+        total_score = 0
+        for key, rules, in thresholds.items():
+            value = data[key]
+            for threshold, points in rules:
+                if value >= threshold:
+                    total_score += points
+                    break
+        return total_score
+    
+    def get_saturation_average(self, hour_data):
+        saturation = (
+            hour_data["soil_moisture_0_to_1cm"] * 0.5 +
+            hour_data["soil_moisture_1_to_3cm"] * 0.3 + 
+            hour_data["soil_moisture_3_to_9cm"] * 0.2
+        )
+
+        saturation_level = [
+            "Low",
+            "Normal",
+            "High",
+            "Very High"
+        ]
+        index = round(saturation * 4) - 1
+
+        return saturation_level[index]
+    
+    def prepare_flood_data(self, hour_data, display_data):        
+        display_data["soil_saturation"] = self.get_saturation_average(
+            hour_data[0]
+        )
+
+        display_data["rain_1h"] = hour_data[0]["rain"]
+
+        rain_6h = sum(hour["rain"] for hour in hour_data[:6])
+        display_data["rain_6h"] = rain_6h
+
+        rain_24h = sum(hour["rain"] for hour in hour_data[:24])
+        display_data["rain_24h"] = rain_24h
+
+        display_data["rain_chance"] = hour_data[0][
+            "precipitation_probability"
+        ]
+
+        return display_data
+
+    def flood_alert(self, upcoming_flood_data):
+        pass
+    
     def update_flood_display(self):
+        display_data = {
+            "soil_saturation": "",
+            "rain_1h": 0,
+            "rain_6h": 0,
+            "rain_24h": 0,
+            "rain_chance": 0
+        }
+        if self.selected_location:
+            location_key = self.locations[
+                f"{self.selected_location}"]["location"]
+            
+            timestamps = list(
+                self.flood_data[location_key].keys()
+            )
+            
+            hour_data = list(
+                self.flood_data[location_key].values()
+            )
+            
+            display_data = self.prepare_flood_data(
+                hour_data, 
+                display_data
+            )
+
+            upcoming_flood_data = list(zip(
+                timestamps[:24],
+                hour_data[:24]
+            ))
+
+            display_data = self.round_weather_data(display_data)
+
+        else:
+            for score in FLOOD_SCORES:
+                display_data[score[0]] = "--"
+            upcoming_flood_data = {}
+        
+        self.flood_alert(upcoming_flood_data)
+
+        self.flood_ground_sat_label.config(
+            text=f"Ground Saturation \t{display_data['soil_saturation']}"
+        )
+
+        self.flood_rain_1hr_label.config(
+            text=f"Current Rainfall \t{display_data['rain_1h']}mm/h"
+        )
+
+        self.flood_rain_6hr_label.config(
+            text=f"6-hour Forecast \t{display_data['rain_6h']}mm"
+        )
+
+        self.flood_rain_24hr_label.config(
+            text=f"24-Hour Rainfall \t{display_data['rain_24h']}mm"
+        )
+
+        self.flood_rain_prob_label.config(
+            text=f"Rain Probability \t{display_data['rain_chance']}"
+        )
+
+    def earthquake_alert(self):
         pass
 
     def update_earthquake_display(self):
@@ -1761,16 +1895,25 @@ class disasterApp:
             )
         
         self.weather_data["daily"] = daily_data
+        self.weather_data["hourly"] = {}
 
-        for timestamp, data in raw_hourly_data.items():
-            for key, value in data.items():
-                if key in WEATHER_FIELDS:
-                    self.weather_data["hourly"][timestamp][key] = value
-                if key in FLOOD_FIELDS:
-                    self.flood_data[timestamp][key] = value
+        for location, output in raw_hourly_data.items():
+            self.weather_data["hourly"][location] = {}
+            self.flood_data[location] = {}
+            for timestamp, data in output.items():
+                self.weather_data["hourly"][location][timestamp] = {}
+                self.flood_data[location][timestamp] = {}
+                for key, value in data.items():
+                    if key in WEATHER_FIELDS:
+                        self.weather_data["hourly"]\
+                            [location][timestamp][key] = value
+                    if key in FLOOD_FIELDS:
+                        self.flood_data\
+                            [location][timestamp][key] = value
         
         self.update_weather_display()
-
+        self.update_flood_display()
+    
     def refresh_earthquake_api(self, package):
         pass
 

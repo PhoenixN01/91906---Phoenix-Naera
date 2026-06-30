@@ -9,13 +9,13 @@
         "timezone": "Pacific/Auckland"
     },
     "1": {
-        "location": "South Taranaki District, New Zealand",
+        "location": "Cheshire West and Chester, United Kingdom",
         "radius": 10,
         "coords": [
-            -39.5209891,
-            174.4506861
+            53.1637979,
+            -2.7285361
         ],
-        "timezone": "Pacific/Auckland"
+        "timezone": "Europe/London"
     },
     "2": {
         "location": "Suffolk County, United States",

@@ -57,7 +57,7 @@ def get_weather_data(session, package, fields):
 
 		hourly_variables = {
 			field: hourly.Variables(i).ValuesAsNumpy()
-			for i, field in enumerate(WEATHER_FIELDS)
+			for i, field in enumerate(fields)
 		}
 
 		start_time = hourly.Time()
