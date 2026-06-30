@@ -1696,23 +1696,16 @@ class disasterApp:
             f"{hour_data['surface_pressure']}hPa"
         )
     
-    def calculate_flood_points(self, data, thresholds):
-        total_score = 0
-        for key, rules, in thresholds.items():
-            value = data[key]
-            for threshold, points in rules:
-                if value >= threshold:
-                    total_score += points
-                    break
-        return total_score
-    
     def get_saturation_average(self, hour_data):
         saturation = (
             hour_data["soil_moisture_0_to_1cm"] * 0.5 +
             hour_data["soil_moisture_1_to_3cm"] * 0.3 + 
             hour_data["soil_moisture_3_to_9cm"] * 0.2
         )
-
+        return saturation
+    
+    def get_saturation_string(self, hour_data):
+        saturation = hour_data["soil_saturation"]
         saturation_level = [
             "Low",
             "Normal",
@@ -1723,36 +1716,71 @@ class disasterApp:
 
         return saturation_level[index]
     
-    def prepare_flood_data(self, hour_data, display_data):        
-        display_data["soil_saturation"] = self.get_saturation_average(
-            hour_data[0]
-        )
+    def prepare_flood_data(self, hour_data, display_data):
+        for i in range(24):
+            display_data[i]["soil_saturation"] = \
+                self.get_saturation_average(hour_data[i])
 
-        display_data["rain_1h"] = hour_data[0]["rain"]
+            display_data[i]["rain_1h"] = hour_data[i]["rain"]
 
-        rain_6h = sum(hour["rain"] for hour in hour_data[:6])
-        display_data["rain_6h"] = rain_6h
+            rain_6h = sum(hour["rain"] for hour in hour_data[i:6])
+            display_data[i]["rain_6h"] = rain_6h
 
-        rain_24h = sum(hour["rain"] for hour in hour_data[:24])
-        display_data["rain_24h"] = rain_24h
+            rain_24h = sum(hour["rain"] for hour in hour_data[i:24])
+            display_data[i]["rain_24h"] = rain_24h
 
-        display_data["rain_chance"] = hour_data[0][
-            "precipitation_probability"
-        ]
+            display_data[i]["rain_chance"] = hour_data[i][
+                "precipitation_probability"
+            ]
 
         return display_data
+    
+    def calculate_flood_points(self, data, thresholds):
+        total_score = 0
+        for key, rules in thresholds:
+            value = data[key]
+            for threshold, points in rules:
+                if value >= threshold:
+                    total_score += points
+                    break
+        return total_score
 
     def flood_alert(self, upcoming_flood_data):
-        pass
-    
+        if upcoming_flood_data == {}:
+            level = "INACTIVE"
+        else:
+            worst_timestamp = None
+            worst_data = None
+            highest_score = -1
+            for timestamp, hour in upcoming_flood_data.items():
+                score = self.calculate_flood_points(
+                    upcoming_flood_data,
+                    FLOOD_SCORES
+                )
+                if score > highest_score:
+                    highest_score = score
+                    worst_timestamp = timestamp
+                    worst_data = hour
+            
+            if highest_score>= 9:
+                level = "SEVERE_WARNING"
+            elif highest_score >= 6:
+                level = "WARNING"
+            else:
+                level = "NORMAL"
+
+        self.all_status_f_indicator.setColour(level)
+        self.all_status_f_label.config(
+            text=f"Flood: {self.alert_strings[level][0]}"
+        )
+        self.flood_status_indicator.setColour(level)
+        self.flood_status_message.config(
+            text=f"Flood Status: {self.alert_strings[level][-1]}"
+        )
+        
     def update_flood_display(self):
-        display_data = {
-            "soil_saturation": "",
-            "rain_1h": 0,
-            "rain_6h": 0,
-            "rain_24h": 0,
-            "rain_chance": 0
-        }
+        data_template = {score[0]: "--" for score in FLOOD_SCORES}
+        display_data = []
         if self.selected_location:
             location_key = self.locations[
                 f"{self.selected_location}"]["location"]
@@ -1764,28 +1792,33 @@ class disasterApp:
             hour_data = list(
                 self.flood_data[location_key].values()
             )
+
+            for _ in range(len(hour_data)):
+                display_data.append(data_template)
             
             display_data = self.prepare_flood_data(
                 hour_data, 
                 display_data
             )
 
-            upcoming_flood_data = list(zip(
+            upcoming_flood_data = dict(zip(
                 timestamps[:24],
-                hour_data[:24]
+                display_data[:24]
             ))
 
-            display_data = self.round_weather_data(display_data)
+            display_data = display_data[0]
 
+            saturation_string = self.get_saturation_string(display_data)
+            display_data = self.round_weather_data(display_data)
         else:
-            for score in FLOOD_SCORES:
-                display_data[score[0]] = "--"
+            display_data = data_template
             upcoming_flood_data = {}
+            saturation_string = "--"
         
         self.flood_alert(upcoming_flood_data)
 
         self.flood_ground_sat_label.config(
-            text=f"Ground Saturation \t{display_data['soil_saturation']}"
+            text=f"Ground Saturation \t{saturation_string}"
         )
 
         self.flood_rain_1hr_label.config(
