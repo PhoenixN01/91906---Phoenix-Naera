@@ -2,6 +2,7 @@ import openmeteo_requests
 
 import datetime
 import requests_cache
+import requests
 from retry_requests import retry
 import json
 from timezonefinder import TimezoneFinder
@@ -48,8 +49,12 @@ def get_weather_data(session, package, fields):
 	all_daily_data = {}
 
 	for n in range(len(package["location"])):
-		# Process each location
+		# Process each location in the openmeteo response
 		response = responses[n]
+		
+		if isinstance(response, dict):
+			if "error" in response:
+				return response
 
 		# Process hourly data.
 		hourly = response.Hourly()
@@ -100,7 +105,7 @@ def get_weather_data(session, package, fields):
 		all_hourly_weather[package["location"][n]] = hourly_weather
 		all_daily_data[package["location"][n]] = daily_data
 
-	return all_hourly_weather, all_daily_data
+	return (all_hourly_weather, all_daily_data)
 
 session = initialize_cache()
 

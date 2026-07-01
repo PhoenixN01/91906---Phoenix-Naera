@@ -1,32 +1,79 @@
 from datetime import datetime, timedelta, timezone
+import requests
+
 import requests_cache
 from retry_requests import retry
-
 import json
 
 URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
-cache_session = requests_cache.CachedSession('.cache', expire_after = 300)
-retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+def initialize_cache():
+    """Initiate the cache system for the Earthquake API
+    
+    """
+    # Setup the Open-Meteo client with cache and retry on error so that
+    # API calls per day is kept at a minimum
+    cache_session = requests_cache.CachedSession(
+        'earthquake.cache',
+        expire_after = 300
+    )
 
-starttime = (
-    datetime.now(timezone.utc) - timedelta(hours=1)
-).isoformat()
+    # ^^ Read above. Same but retry ^^
+    retry_session = retry(
+        cache_session,
+        retries = 5,
+        backoff_factor = 0.2
+    )
+    return retry_session
 
-core_params = {
-    "format": "geojson",
-	"latitude": -36.85,
-	"longitude": 174.76,
-	"maxradiuskm": 500,
-    "starttime": starttime,
-    "orderby": "time",
-    "eventtype": "earthquake",
-    "minmagnitude": 2.5
-} 
+def get_earthquake_data(session, package):
+    starttime = (
+        datetime.now(timezone.utc) - timedelta(days=30)
+    ).isoformat()
 
-response = retry_session.get(URL, params=core_params)
+    all_earthquakes = {}
+    url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
-data = response.json()
+    core_params = {
+        "format": "geojson",
+        "latitude": package["lat"][n],
+        "longitude": package["lon"][n],
+        "maxradiuskm": package["radius"][n],
+        "starttime": starttime,
+        "orderby": "time",
+        "eventtype": "earthquake",
+        "minmagnitude": 2.5
+    }
 
-print(json.dumps(data["features"], indent=2))
+    for n in range(len(package["location"])):
+        try:
+            response = session.get(url, params=core_params)
+            response.raise_for_status()
+            data = response.json()
+
+            earthquakes = []
+
+            for feature in data["features"]:
+                properties = feature["properties"]
+                geometry = feature["geometry"]
+
+                earthquake = {
+                    "magnitude": properties["mag"],
+                    "place": properties["place"],
+                    "time": properties["time"],
+                    "longitude": geometry["coordinates"][0],
+                    "latitude": geometry["coordinates"][1],
+                    "depth": geometry["coordinates"][2]
+                }
+                earthquakes.append(earthquake)
+            all_earthquakes[package["location"][n]] = earthquakes
+        except requests.RequestException as e:
+            message = (
+                "Failed to fetch earthquake data for " + 
+                f"{package['location']}: {e}"
+            )
+            return message
+            
+    return all_earthquakes
+
 
