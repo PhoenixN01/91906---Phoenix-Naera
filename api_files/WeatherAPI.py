@@ -6,6 +6,7 @@ import requests
 from retry_requests import retry
 import json
 from timezonefinder import TimezoneFinder
+from zoneinfo import ZoneInfo
 
 WEATHER_FIELDS = [
 	"temperature_2m",
@@ -70,9 +71,12 @@ def get_weather_data(session, package, fields):
 
 		num_hours = len(next(iter(hourly_variables.values())))
 
+		location_tz = ZoneInfo(package["timezone"][n])
+
 		for hour in range(num_hours):
 			timestamp = datetime.datetime.fromtimestamp(
-				start_time + hour * interval
+				start_time + hour * interval,
+				tz=location_tz
 			).strftime("%Y-%m-%d %H:%M")
 
 			hourly_weather[timestamp] = {
@@ -84,13 +88,21 @@ def get_weather_data(session, package, fields):
 		daily = response.Daily()
 		daily_sunrise = daily.Variables(0).ValuesInt64AsNumpy()
 		daily_sunrise_converted = datetime.datetime.fromtimestamp(
-			daily_sunrise[0])
-		daily_sunrise_string = daily_sunrise_converted.strftime("%I:%M %p")
+			daily_sunrise[0],
+			tz=location_tz
+		)
+		daily_sunrise_string = daily_sunrise_converted.strftime(
+			"%I:%M %p %Z"
+		)
 
 		daily_sunset = daily.Variables(1).ValuesInt64AsNumpy()
 		daily_sunset_converted = datetime.datetime.fromtimestamp(
-			daily_sunset[0])
-		daily_sunset_string = daily_sunset_converted.strftime("%I:%M %p")
+			daily_sunset[0],
+			tz=location_tz
+		)
+		daily_sunset_string = daily_sunset_converted.strftime(
+			"%I:%M %p %Z"
+		)
 
 		daily_timestamp = datetime.datetime.fromtimestamp(
 			daily.Time(),
@@ -99,6 +111,7 @@ def get_weather_data(session, package, fields):
 
 		daily_data = {
 			"date": daily_timestamp.strftime("%Y-%m-%d"),
+			"timezone": package["timezone"][n],
 			"sunrise": daily_sunrise_string,
 			"sunset": daily_sunset_string
 		}

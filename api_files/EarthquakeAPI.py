@@ -8,9 +8,7 @@ import json
 URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
 def initialize_cache():
-    """Initiate the cache system for the Earthquake API
-    
-    """
+    """Initiate the cache system for the Earthquake API"""
     # Setup the Open-Meteo client with cache and retry on error so that
     # API calls per day is kept at a minimum
     cache_session = requests_cache.CachedSession(
@@ -28,14 +26,16 @@ def initialize_cache():
 
 def get_earthquake_data(session, package):
     starttime = (
-        datetime.now(timezone.utc) - timedelta(days=30)
+        datetime.now(timezone.utc) - timedelta(days=60)
     ).isoformat()
 
     all_earthquakes = {}
     url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 
-    core_params = {
+    for n in range(len(package["location"])):
+        core_params = {
         "format": "geojson",
+        "jsonerror": True,
         "latitude": package["lat"][n],
         "longitude": package["lon"][n],
         "maxradiuskm": package["radius"][n],
@@ -44,8 +44,6 @@ def get_earthquake_data(session, package):
         "eventtype": "earthquake",
         "minmagnitude": 2.5
     }
-
-    for n in range(len(package["location"])):
         try:
             response = session.get(url, params=core_params)
             response.raise_for_status()

@@ -5,6 +5,7 @@ from tkinter import ttk
 from datetime import datetime, timedelta
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
+import requests
 import json
 import os
 
@@ -75,13 +76,13 @@ WEATHER_MESSAGES = {
         "WARNING": {
             "title": "Unsettled weather expected",
             "description": 
-            "Weather conditions may become hazardous. " + 
+            "Weather conditions may become hazardous around {time}. " + 
             "Continue monitoring forecasts throughout the day."
         },
         "SEVERE_WARNING": {
             "title": "Dangerous weather conditions",
             "description": 
-            "Severe weather is expected or already occurring. " + 
+            "Severe weather is expected around {time}." + 
             "Avoid unnecessary travel and follow official advice."
         }
     },
@@ -90,20 +91,20 @@ WEATHER_MESSAGES = {
         "NORMAL": {
             "title": "Light rainfall expected",
             "description": 
-            "Rain is forecast but is not expected to cause " + 
-            "significant disruption."
+            "Rain is forecast, but is not expected to " + 
+            "cause significant disruption."
         },
         "WARNING": {
             "title": "Heavy rainfall expected",
             "description": 
-            "Periods of heavy rain may reduce visibility, " + 
-            "create surface flooding and affect travel."
+            "Periods of heavy rain around {time} may reduce " + 
+            "visibility, create surface flooding and affect travel."
         },
         "SEVERE_WARNING": {
             "title": "Dangerous rainfall",
             "description": 
-            "Very heavy rainfall may cause flash flooding, " + 
-            "slips and hazardous driving conditions."
+            "Very heavy rainfall around {time} may cause flash " + 
+            "flooding, slips and hazardous driving conditions."
         }
     },
 
@@ -117,13 +118,13 @@ WEATHER_MESSAGES = {
         "WARNING": {
             "title": "Strong winds expected",
             "description": 
-            "Strong wind gusts may affect travel and " + 
+            "Strong wind gusts around {time} may affect travel and " + 
             "unsecured outdoor objects."
         },
         "SEVERE_WARNING": {
             "title": "Damaging winds expected",
             "description": 
-            "Very strong wind gusts may damage trees, " + 
+            "Very strong wind gusts around {time} may damage trees, " + 
             "power lines and structures. Stay indoors where possible."
         }
     },
@@ -138,14 +139,14 @@ WEATHER_MESSAGES = {
         "WARNING": {
             "title": "Storm conditions developing",
             "description": 
-            "Heavy rain and strong winds may cause local " + 
-            "disruption and hazardous travel conditions."
+            "Heavy rain and strong winds around {time} may cause " + 
+            "local disruption and hazardous travel conditions."
         },
         "SEVERE_WARNING": {
             "title": "Severe storm conditions",
             "description": 
-            "Dangerous rain and damaging winds are expected. " + 
-            "Significant impacts are possible."
+            "Dangerous rain and damaging winds are expected " + 
+            "around {time}. Significant impacts are possible."
         }
     }
 }
@@ -162,18 +163,18 @@ FLOOD_MESSAGES = {
             "title": "Low flood risk",
             "description": 
             "Current rainfall and ground conditions indicate " + 
-            "little risk of flooding."
+            "little risk of flooding around {time}."
         },
         "WARNING": {
             "title": "Elevated flood risk",
             "description": 
-            "Heavy rainfall and saturated ground may " + 
-            "increase the likelihood of localised flooding."
+            "Heavy rainfall and saturated ground may increase the " + 
+            "likelihood of localised flooding around {time}."
         },
         "SEVERE_WARNING": {
             "title": "High flood risk",
             "description": 
-            "Flooding is likely or imminent. " + 
+            "Flooding is likely or imminent around {time}. " + 
             "Be prepared to move to higher ground if necessary."
         }
     },
@@ -182,19 +183,20 @@ FLOOD_MESSAGES = {
         "NORMAL": {
             "title": "Ground moisture increasing",
             "description": 
-            "Soil moisture is elevated but flooding is " + 
-            "not currently expected."
+            "Soil moisture is elevated around {time}, but flooding " + 
+            "is not currently expected."
         },
         "WARNING": {
             "title": "Ground becoming saturated",
             "description": 
+            "Saturated ground conditions expected around {time}. " + 
             "Further rainfall could quickly produce surface flooding."
         },
         "SEVERE_WARNING": {
             "title": "Ground fully saturated",
             "description": 
             "The ground can absorb little additional rainfall, " + 
-            "greatly increasing flood risk."
+            "greatly increasing flood risk around {time}."
         }
     },
 
@@ -208,12 +210,12 @@ FLOOD_MESSAGES = {
             "title": "Heavy rainfall may cause flooding",
             "description": 
             "Low-lying and poorly drained areas could " + 
-            "experience flooding."
+            "experience flooding around {time}."
         },
         "SEVERE_WARNING": {
             "title": "Flash flooding possible",
             "description": 
-            "Very heavy rainfall may produce dangerous " + 
+            "Very heavy rainfall around {time} may produce dangerous " + 
             "flash flooding with little warning."
         }
     },
@@ -227,14 +229,14 @@ FLOOD_MESSAGES = {
         "WARNING": {
             "title": "Flood conditions developing",
             "description": 
-            "Heavy rainfall together with saturated ground " + 
-            "significantly increases flood potential."
+            "Heavy rainfall together with saturated ground around " + 
+            "{time} significantly increases flood potential."
         },
         "SEVERE_WARNING": {
             "title": "Dangerous flood conditions",
             "description": 
-            "Ground saturation and forecast rainfall indicate " + 
-            "a high likelihood of flooding."
+            "Ground saturation and forecast rainfall around {time} " + 
+            "indicate a high likelihood of flooding."
         }
     }
 }
@@ -361,6 +363,7 @@ class statusIndicator(tk.Canvas):
             bg=bg_colour
         )
 
+        # Assigning indicator colours to every alert status.
         self.status = {
             "SEVERE_WARNING": "#FF0000",
             "WARNING": "#FFDD00",
@@ -413,7 +416,7 @@ class locationEditFrame(ttk.Frame):
         self.create_display()
     
     def create_display(self):
-        """Creates the display of a locationEditFrame"""
+        """Creates the display of a locationEditFrame."""
         self.input_frame = ttk.Frame(self, padding=10)
         self.input_frame.pack()
         self.input_frame.columnconfigure(1, weight=1)
@@ -517,7 +520,7 @@ class locationEditFrame(ttk.Frame):
 
         value = self.listbox.get(selection[0])
 
-        # Exit if the listbox returned 'No city found'
+        # Exit if the listbox returned 'No city found'.
         if value == "No city found":
             return
         
@@ -526,22 +529,33 @@ class locationEditFrame(ttk.Frame):
         self.listbox.delete(0, tk.END)
     
     def validate_radius(self):
-        """Checks if radius input value is a positive integer"""
+        """Checks if radius input value is a positive integer.
+        
+        This method attempts to return the radius as a positive real 
+        integer and returns an error message upon failure.
+        """
+        error = False
         try:
             radius = int(self.info["radius"])
             if radius > 0:
                 self.info["radius"] = radius
-                return True
-        except:
+            else:
+                error = True
+        except TypeError:
+            error = True
+
+        if error:
             messagebox.showerror(
-                "Input Error", 
-                ("Radius Input Must be a " +
-                "Positive Integer Value to continue")
+                    "Input Error", 
+                    ("Radius Input Must be a " +
+                    "Positive Integer Value to continue")
             )
             return False
+        else:
+            return True
     
     def remove_location(self):
-        """Removes the locationItem's location"""
+        """Removes the locationItem's location."""
         l = self.parent.locations[self.id]["location"]
         ask_to_delete = messagebox.askyesno(
             "Confirm Removal",
@@ -551,6 +565,8 @@ class locationEditFrame(ttk.Frame):
         if not ask_to_delete:
             return
         
+        # If the location was the disasterApp's selected location, 
+        # change the selected location to none and refresh display's.
         if self.parent.selected_location == self.locationItem.id:
             self.parent.selected_location = None
             self.parent.update_all_display()
@@ -567,14 +583,15 @@ class locationEditFrame(ttk.Frame):
         self.destroy()
     
     def save_changes(self):
-        """Saves changes for locationItem's location
+        """Saves changes for locationItem's location.
         
         Only updates location if the input values are all valid.
-        Error shown if unsuccessfully validated
+        Error shown if unsuccessfully validated.
         """
         self.info["location"] = self.location_entry.get().strip()
         self.info["radius"] = self.radius_entry.get().strip()
 
+        # Check if the input fields have been entered in correctly.
         if self.info["location"] == "" or\
            self.info["location"] == "No city found":
             messagebox.showerror(
@@ -582,43 +599,50 @@ class locationEditFrame(ttk.Frame):
                 "A valid location is required to save changes"
             )
             return
-        
         if self.info["radius"] == "":
             messagebox.showerror(
                 "Input Error",
                 "A valid radius is required to save changes"
             )
             return
+        
+        # Run validation checks on all inputs to confirm inputs are 
+        # acceptable.
         validated_location = self.get_coordinates()
         validated_radius = self.validate_radius()
 
-        if not validated_radius or not validated_location:
+        if not (validated_radius and validated_location):
             return
         self.info["timezone"] = TF.timezone_at(
             lng=self.info["coords"][1], 
             lat=self.info["coords"][0]
         )
+
         self.parent.locations[self.id]["location"] = self.info[
             "location"]
         self.parent.locations[self.id]["radius"] = self.info["radius"]
         self.parent.locations[self.id]["coords"] = self.info["coords"]
-        self.parent.locations[self.id]["timezone"] = self.info[
-            "timezone"]
+        self.parent.locations[self.id]["timezone"] = \
+            self.info["timezone"]
+        self.parent.locations[self.id]["emergency"] = \
+            self.info["emergency"]
+        
         self.locationItem.location_label.config(
             text=self.info["location"]
         )
         self.locationItem.radius_label.config(
             text=f"Radius: {self.info['radius']}km"
         )
+
         self.parent.update_local_storage()
         self.parent.refresh_all_data()
         self.destroy()
     
     def cancel_changes(self):
-        """Cancel any changes made to locationItem's location
+        """Cancel any changes made to locationItem's location.
         
         Removes the locationItem and its value if a new location was
-        created without any values
+        created without any values.
         """
         if self.location_exists:
             self.destroy()
@@ -630,7 +654,9 @@ class locationEditFrame(ttk.Frame):
             self.destroy()
     
     def get_coordinates(self):
-        """Gets lat lon coordinates from a 'City, Country' address"""
+        """Gets lat lon coordinates from a 'City, Country' address."""
+        # Validate location input to ensure geolocator call has a 
+        # viable input.
         address = self.location_entry.get()
         if "," not in address:
             messagebox.showerror(
@@ -649,28 +675,62 @@ class locationEditFrame(ttk.Frame):
             )
             return False
         
-        try:
-            location = GEOLOCATOR.geocode(address)
+        # Attempt to get location coordinates for API data.
+        # Produce error upon failure.
+        location = GEOLOCATOR.geocode(address, addressdetails=True)
 
-            if location:
-                self.info["coords"] = (
-                    location.latitude, 
-                    location.longitude
-                )
-                return True
-            else:
-                messagebox.showerror("Error", "Location Not Found")
-                return False
-        except:
+        if not location:
             messagebox.showerror(
-                "Error", 
-                "An error occured while trying to get location info"
+                "Location Error", 
+                "An error occured while trying to get location info" +
+                "\nPlease try again later"
             )
             return False
+        
+        self.info["coords"] = (
+            location.latitude, 
+            location.longitude
+        )
+
+        country_code = location.raw.get(
+            'address', {}).get('country_code', '').upper()
+        
+        if not country_code:
+            messagebox.showerror(
+                "Country Error", 
+                "Could not determine country code"
+            )
+            return False
+        
+        emergency_api_url = \
+            f"https://emergencynumberapi.com/api/country/{country_code}"
+        response = requests.get(emergency_api_url)
+
+        if not response.status_code == 200:
+            messagebox.showerror(
+                "Error", 
+                "Failed to retrieve emergency contact information " + 
+                f"for: {address}"
+            )
+            return False
+        
+        data = response.json().get("data", {})
+
+        if data["member_112"]:
+            self.info["emergency"] = [data["dispatch"]["all"][0]]
+        else:
+            self.info["emergency"] = [
+                data["fire"]["all"][0],
+                data["ambulance"]["all"][0],
+                data["police"]["all"][0]
+            ]
+        return True
+        
+            
 
 
 class locationItem(ttk.Frame):
-    """Creates a location item
+    """Creates a location item.
 
     :param frame: The Parent container of the locationItem
     :param parent: The disasterApp that contains the location dict
@@ -697,7 +757,7 @@ class locationItem(ttk.Frame):
         self.info_frame.grid(row=0, column=0, sticky="w")
 
         # Reinstate previous save data if created from existing 
-        # location stored in local storage
+        # location stored in local storage.
         previous_info = parent.locations[id]
 
         self.location_label = ttk.Label(
@@ -732,21 +792,19 @@ class locationItem(ttk.Frame):
         )
         self.select_button.grid(row=0, column=2, sticky="e", padx=5)
 
-        if not (self.parent.locations[id]["location"] or 
-                self.parent.locations[id]["radius"] or 
-                self.parent.locations[id]["coords"]):
+        if not self.parent.locations[id]["location"]:
             self.edit_location(False)
     
     def display_self(self):
-        """Show the locationItem"""
+        """Show the locationItem."""
         self.pack(fill="x", expand=False)
 
     def edit_location(self, locationExists):
-        """Open a locationEditFrame to edit / remove the location
+        """Open a locationEditFrame to edit / remove the location.
         
         Allows the user to edit the locationItem by opening a 
         locationEditFrame class that can edit or remove this items 
-        location data from temporary and local storage 
+        location data from temporary and local storage.
         """
         self.edit_menu = locationEditFrame(
             self.parent.location_popup_menu, 
@@ -790,14 +848,14 @@ class locationItem(ttk.Frame):
         )
 
 class disasterApp:
-    """Creates an instance of the disasterApp
+    """Creates an instance of the disasterApp.
     
     :param root: The root window for the app
     :param location_data: The locally stored location data
     :param system_data: The locally stored system data
 
     This class is responsible for initiating and operating the disaster
-    app
+    app.
     """
     def __init__(self, root, location_data):
         self.root = root
@@ -835,6 +893,10 @@ class disasterApp:
 
         self.weather_data = {}
         self.flood_data = {}
+        self.earthquake_data = {}
+        
+        # The forecast value for alerts in hours
+        self.data_forecast = 24
 
         self.alert_strings = {
             "INACTIVE": ["Inactive"],
@@ -851,7 +913,7 @@ class disasterApp:
         self.refresh_all_data()
 
     def create_styles(self):
-        """Creates the ttk styles for the disasterApp"""
+        """Creates the ttk styles for the disasterApp."""
         self.style.configure(
             "MainBG.TFrame",
             background="#F0F0F0"
@@ -960,11 +1022,11 @@ class disasterApp:
 
     
     def create_frames(self):
-        """Creates the layout structure of the GUI
+        """Creates the layout structure of the GUI.
         
         The usage of create_frames when creating frames used to control 
         the positioning and layout of items on screen keeps code
-        consisten and separate from the widgets (elements) of the GUI
+        consisten and separate from the widgets (elements) of the GUI.
         """
         
         self.main_frame = ttk.Frame(self.root, style="MainBG.TFrame")
@@ -1002,7 +1064,7 @@ class disasterApp:
             pady=(0, 5)
         )
 
-        # All frames for Weather-specific window
+        # All frames for Weather-specific window.
         self.weather_frame = ttk.Frame(
             self.main_frame,
             style="MainBG.TFrame"
@@ -1064,7 +1126,7 @@ class disasterApp:
         self.w_info_rainCol.rowconfigure(1, weight=1)
         self.w_info_rainCol.columnconfigure(0, weight=1)
         
-        # All frames for flood-specific window
+        # All frames for flood-specific window.
         self.flood_frame = ttk.Frame(self.main_frame)
 
         self.f_info_container = ttk.Frame(
@@ -1095,7 +1157,7 @@ class disasterApp:
             sticky="nsew"
         )
         
-        # All frames for earthquake-specific window
+        # All frames for earthquake-specific window.
         self.earthquake_frame = ttk.Frame(self.main_frame)
 
         self.q_info_container = ttk.Frame(
@@ -1110,20 +1172,20 @@ class disasterApp:
         self.q_status_container.grid(row=0, column=0)
 
     def create_widgets_all(self):
-        """Run all create_widget methods in disasterApp"""
+        """Run all create_widget methods in disasterApp."""
         self.create_widgets_main()
         self.create_widgets_weather()
         self.create_widgets_flood()
         self.create_widgets_earthquake()
     
     def create_widgets_main(self):
-        """Creates the widgets for the Main GUI
+        """Creates the widgets for the Main GUI.
 
         this method is used when creating all of the elements seen 
         on the home screen by users and is responsible for populating 
-        the main gui frame
+        the main gui frame.
         """
-        # Refresh tag at top of GUI
+        # Refresh tag at top of GUI.
         self.last_refresh_label = ttk.Label(
             self.refresh_frame, 
             text=f"Last refreshed at: {self.last_refresh}",
@@ -1131,7 +1193,7 @@ class disasterApp:
             )
         self.last_refresh_label.pack(side="top")
 
-        # Current Location Display
+        # Current Location Display.
         self.current_location_label = ttk.Label(
             self.location_frame,
             text="Current Location: Not Selected",
@@ -1157,7 +1219,7 @@ class disasterApp:
         )
         self.search_radius_label.grid(row=1, column=0, sticky="w")
 
-        # Main Status Display (home screen)
+        # Main Status Display (home screen).
         self.all_status_title = ttk.Label(
             self.all_status_frame,
             text="Status Monitoring",
@@ -1166,7 +1228,7 @@ class disasterApp:
         )
         self.all_status_title.pack()
 
-        # Row 1: Weather Status
+        # Row 1: Weather Status.
         self.all_status_row1 = ttk.Frame(
             self.all_status_frame,
             padding=2.5,
@@ -1210,7 +1272,7 @@ class disasterApp:
             padx=8
         )
 
-        # Row 2: Flood Status
+        # Row 2: Flood Status.
         self.all_status_row2 = ttk.Frame(
             self.all_status_frame,
             padding=2.5,
@@ -1254,7 +1316,7 @@ class disasterApp:
             padx=8
         )
 
-        # Row 3: Earthquake Status
+        # Row 3: Earthquake Status.
         self.all_status_row3 = ttk.Frame(
             self.all_status_frame,
             padding=2.5,
@@ -1298,7 +1360,7 @@ class disasterApp:
             padx=8
         )
 
-        # Footer Buttons
+        # Footer Buttons.
         self.back_home_button = ttk.Button(
             self.footer_frame,
             text="Back home",
@@ -1317,13 +1379,13 @@ class disasterApp:
         self.all_sync_button.place(relx=0.5, rely=0.5, anchor="center")
 
     def create_widgets_weather(self):
-        """Creates the widgets for the Weather GUI
+        """Creates the widgets for the Weather GUI.
 
         this method is used when creating all of the elements seen 
         on the weather screen by users and is responsible for populating 
-        the weather gui frame
+        the weather gui frame.
         """
-        # Weather Main Status
+        # Weather Main Status.
         self.weather_status_indicator = statusIndicator(
             self.w_status_frame,
             "#F0F0F0"
@@ -1354,7 +1416,7 @@ class disasterApp:
         )
         self.weather_status_description.grid(row=1, column=0)
 
-        # Weather Information (From API)
+        # Weather Information (From API).
         self.weather_sunrise_card = ttk.Frame(
             self.w_info_sunCol,
             padding=(6, 3),
@@ -1540,14 +1602,14 @@ class disasterApp:
         self.weather_surface_pressure_label.pack(expand=True)
 
     def create_widgets_flood(self):
-        """Creates the widgets for the Flood GUI
+        """Creates the widgets for the Flood GUI.
 
         This method is used when creating all of the elements seen 
         on the flood screen by users and is responsible for populating 
-        the flood gui frame
+        the flood gui frame.
         """
 
-        # Flood Status
+        # Flood Status.
         self.flood_status_indicator = statusIndicator(
             self.f_status_container,
             "#D9D9D9"
@@ -1569,7 +1631,7 @@ class disasterApp:
         )
         self.flood_status_description.grid(row=1, column=0)
 
-        # Flood Information (From API)
+        # Flood Information (From API).
         self.flood_conditions_label = ttk.Label(
             self.f_details_container,
             text="Current Flood Conditions\n",
@@ -1607,14 +1669,14 @@ class disasterApp:
         self.flood_rain_prob_label.grid(row=5, column=0, sticky="nsew")
 
     def create_widgets_earthquake(self):
-        """Creates the widgets for the Earthquake GUI
+        """Creates the widgets for the Earthquake GUI.
 
         This method is used when creating all of the elements seen 
         on the earthquake screen by users and is responsible for 
-        populating the earthquake gui frame
+        populating the earthquake gui frame.
         """
 
-        # Earthquake Information (From API)
+        # Earthquake Status.
         self.earthquake_status_indicator = statusIndicator(
             self.q_status_container,
             "#D9D9D9"
@@ -1638,33 +1700,46 @@ class disasterApp:
             sticky="nsew"
         )
 
+        # Earthquake Information (From API).
+        self.nearby_earthquake_label = ttk.Label(
+            self.q_info_container,
+            text="Nearby Earthquakes: ",
+            padding=10,
+            anchor="center"
+        )
+        self.nearby_earthquake_label.grid(
+            row=2,
+            column=0,
+            sticky="nsew"
+        )
         self.earthquake_seismic_activity = ttk.Treeview(
             self.q_info_container,
-            columns=("Datetime", "Seismic")
+            columns=("time", "place", "depth", "magnitude")
         )
         self.earthquake_seismic_activity.column(
             "#0", width=0, stretch=tk.NO
         )
-        self.earthquake_seismic_activity.column(
-            "Datetime", 
-        )
-        self.earthquake_seismic_activity.column(
-            "Seismic", 
+        self.earthquake_seismic_activity.heading(
+            "time", text="Date & Time"
         )
         self.earthquake_seismic_activity.heading(
-            "Datetime", text="Date & Time"
+            "place", text="Location"
         )
         self.earthquake_seismic_activity.heading(
-            "Seismic", text="Seismic Activity"
+            "depth", text="Depth"
         )
+        self.earthquake_seismic_activity.heading(
+            "magnitude", text="Magnitude"
+        )
+        
         self.earthquake_seismic_activity.grid(
-            row=2, 
+            row=3, 
             column=0, 
             sticky="nsew"
         )
     
     def show_home_display(self):
-        """Updates disasterApp view to show home info"""
+        """Updates disasterApp view to show home info."""
         self.all_status_frame.pack(fill="x", expand=True)
         self.weather_frame.pack_forget()
         self.flood_frame.pack_forget()
@@ -1672,7 +1747,7 @@ class disasterApp:
         self.back_home_button.pack_forget()
     
     def show_weather_display(self):
-        """Updates disasterApp view to show weather info"""
+        """Updates disasterApp view to show weather info."""
         self.all_status_frame.pack_forget()
         self.weather_frame.pack(fill="x", expand=True)
         self.flood_frame.pack_forget()
@@ -1680,7 +1755,7 @@ class disasterApp:
         self.back_home_button.pack(side="left", padx=10)
 
     def show_flood_display(self):
-        """Updates disasterApp view to show flood info"""
+        """Updates disasterApp view to show flood info."""
         self.all_status_frame.pack_forget()
         self.weather_frame.pack_forget()
         self.flood_frame.pack(fill="x", expand=True)
@@ -1688,7 +1763,7 @@ class disasterApp:
         self.back_home_button.pack(side="left", padx=10)
     
     def show_earthquake_display(self):
-        """Updates disasterApp view to show earthquake info"""
+        """Updates disasterApp view to show earthquake info."""
         self.all_status_frame.pack_forget()
         self.weather_frame.pack_forget()
         self.flood_frame.pack_forget()
@@ -1696,7 +1771,7 @@ class disasterApp:
         self.back_home_button.pack(side="left", padx=10)
     
     def create_location_menu(self):
-        """Initiates the disasterApp location menu popup"""
+        """Initiates the disasterApp location menu popup."""
         self.location_popup_menu = ttk.Frame(
             self.root,
             borderwidth=3,
@@ -1732,10 +1807,10 @@ class disasterApp:
         self.new_location_button.place(relx=0.5, rely=1, anchor="s")
         
     def show_location_menu(self):
-        """Opens the disasterApp location menu
+        """Opens the disasterApp location menu.
         
         If location data exists then the menu will be populated with 
-        locationItems assigned to each existing location found
+        locationItems assigned to each existing location found.
         """
         if self.locations:
             if self.location_items:
@@ -1759,10 +1834,10 @@ class disasterApp:
         self.location_popup_menu.update_idletasks()
     
     def create_location(self):
-        """Creates a new location
+        """Creates a new location.
         
         This method initiates a blank location item in the disasterApp
-        and assigns a locationItem to it
+        and assigns a locationItem to it.
         """
         id = f"{self.nextid}"
         self.nextid += 1
@@ -1770,7 +1845,8 @@ class disasterApp:
             "location": "",
             "radius": "",
             "coords": "",
-            "timezone": ""
+            "timezone": "",
+            "emergency": ""
         }
 
         self.location_items[id] = locationItem(
@@ -1780,7 +1856,7 @@ class disasterApp:
         )
 
     def set_selected_location(self, new_id):
-        """Activates the selected location and deselect other locations
+        """Activates the selected location and deselect other locations.
         
         :param new_id: The id of the new selected location
         """
@@ -1796,16 +1872,17 @@ class disasterApp:
             new.select_location_ui_only()
 
         self.update_all_display()
+        self.location_popup_menu.place_forget()
     
     def update_all_display(self):
-        """Run all update_display methods"""
+        """Run all update_display methods."""
         self.update_main_display()
         self.update_weather_display()
         self.update_flood_display()
         self.update_earthquake_display()
 
     def update_main_display(self):
-        """Update the disasterApp display"""
+        """Update the disasterApp display."""
         if self.selected_location:
             location_info = self.locations[self.selected_location]
 
@@ -1827,9 +1904,25 @@ class disasterApp:
             )
     
     def get_alert_message(self, type, level, subtype="GENERAL"):
+        """Get the relevant alert message from MESSAGE constants."""
         return self.alert_messsages[type][subtype][level]
 
+    def convert_timestamp_message(self, time):
+        if not time:
+            return time
+        
+        time = datetime.strptime(time, "%Y-%m-%d %H:%M")
+        time_string = time.strftime("%I:%M %p")
+        now = datetime.now()
+
+        if time.day != now.day:
+            time_string = time_string + " tomorrow"
+        else:
+            time_string = time_string + " today"
+        return time_string
+
     def weather_alert(self, upcoming_weather_data):
+        """Get the weather alert based on upcoming weather data."""
         if not upcoming_weather_data:
             return {
                 "level": "INACTIVE",
@@ -1841,6 +1934,7 @@ class disasterApp:
         worst_data = None
         highest_score = -1
         
+        # Find worst weather conditions in upcoming data.
         for timestamp, hour in upcoming_weather_data:
             score = max(
                 hour["wind_gusts_10m"],
@@ -1854,6 +1948,7 @@ class disasterApp:
         wind = worst_data["wind_gusts_10m"]
         rain = worst_data["rain"]
 
+        # Determine alert type based off severity of weather conditions.
         if rain >= 5 and wind >= 40:
             category = "STORM"
         elif rain >= 5:
@@ -1863,6 +1958,7 @@ class disasterApp:
         else:
             category = "GENERAL"
 
+        # Determine weather alert severity
         if wind >= 60 or rain >= 10:
             level = "SEVERE_WARNING"
         elif wind >= 40 or rain >= 5:
@@ -1877,7 +1973,7 @@ class disasterApp:
         }
 
     def get_wind_direction(self, degrees):
-        """Get relative wind direction based of compass degrees
+        """Get relative wind direction based of compass degrees.
         
         :param degrees: a float point value from 0 to 360 degrees
         """
@@ -1892,14 +1988,20 @@ class disasterApp:
         return directions[index]
 
     def round_weather_data(self, hour_data):
-        """Round all of the weather api data"""
+        """Round all of the weather api data."""
         for key, value in hour_data.items():
             if isinstance(value, (float, int)):
                 hour_data[key] = round(value)
         return hour_data
         
     def update_weather_display(self):
-        """Updates the weather specific display"""
+        """Updates the weather specific display.
+
+        Format weather data based off currently selected location 
+        ready for gui display to be updated accordingly.
+
+        (No selected location displays placeholder data).
+        """
         if self.selected_location:
             location_key = self.locations[
                 f"{self.selected_location}"]["location"]
@@ -1912,8 +2014,8 @@ class disasterApp:
             )
             
             upcoming_weather_data = list(zip(
-                timestamps[:24], 
-                hour_data[:24]
+                timestamps[:self.data_forecast], 
+                hour_data[:self.data_forecast]
             ))
 
             hour_data = hour_data[0]
@@ -1934,14 +2036,19 @@ class disasterApp:
             }
             upcoming_weather_data = {}
         
+        # Get weather alert from formatted upcoming weather data.
         alert_result = self.weather_alert(upcoming_weather_data)
         level = alert_result["level"]
         category = alert_result["category"]
-        time = alert_result["worst_timestamp"]
+        time = self.convert_timestamp_message(
+            alert_result["worst_timestamp"]
+        )
 
         message = self.get_alert_message("weather", level, category)
+        message["description"] = \
+            message["description"].format(time=time)
 
-
+        # Update all Weather Widgets.
         self.all_status_w_indicator.setColour(level)
         self.weather_status_indicator.setColour(level)
 
@@ -1992,6 +2099,11 @@ class disasterApp:
         )
 
     def build_flood_context(self, worst_data, worst_time):
+        """Create worst Flood Data context.
+        
+        Format a dict containing the contextual flood data needed for
+        a flood alert.
+        """
         return {
             "time": worst_time,
             "rain_1h": worst_data["rain_1h"],
@@ -2000,6 +2112,7 @@ class disasterApp:
         }
     
     def get_saturation_average(self, hour_data):
+        """Return a weighted average of the soil_moisture readings."""
         saturation = (
             hour_data["soil_moisture_0_to_1cm"] * 0.5 +
             hour_data["soil_moisture_1_to_3cm"] * 0.3 + 
@@ -2008,6 +2121,11 @@ class disasterApp:
         return saturation
     
     def get_saturation_string(self, hour_data):
+        """Format soil saturation level into keyword ranges.
+        
+        Converts the soil saturation value into a keyword depicting the 
+        relative range from Low to Very High saturation.
+        """
         saturation = hour_data["soil_saturation"]
         saturation_level = [
             "Low",
@@ -2020,16 +2138,21 @@ class disasterApp:
         return saturation_level[index]
     
     def prepare_flood_data(self, hour_data, display_data):
-        for i in range(24):
+        """Convert hour_data into displayable data for the gui.
+        
+        Get hour data from API and calculate required values for 
+        alert system and gui.
+        """
+        for i in range(self.data_forecast):
             display_data[i]["soil_saturation"] = \
                 self.get_saturation_average(hour_data[i])
 
             display_data[i]["rain_1h"] = hour_data[i]["rain"]
 
-            rain_6h = sum(hour["rain"] for hour in hour_data[i:6])
+            rain_6h = sum(hour["rain"] for hour in hour_data[i:(i+6)])
             display_data[i]["rain_6h"] = rain_6h
 
-            rain_24h = sum(hour["rain"] for hour in hour_data[i:24])
+            rain_24h = sum(hour["rain"] for hour in hour_data[i:(i+24)])
             display_data[i]["rain_24h"] = rain_24h
 
             display_data[i]["rain_chance"] = hour_data[i][
@@ -2039,6 +2162,11 @@ class disasterApp:
         return display_data
     
     def calculate_flood_points(self, data, thresholds):
+        """Calculate flood score based off flood ruling.
+        
+        Compare flood data to threshold ruling for alert severity
+        calculations.
+        """
         total_score = 0
         for key, rules in thresholds:
             value = data[key]
@@ -2049,6 +2177,7 @@ class disasterApp:
         return total_score
 
     def flood_alert(self, upcoming_flood_data):
+        """Get the flood alert based off the upcoming flood data"""
         if not upcoming_flood_data:
             return {
                 "level": "INACTIVE",
@@ -2060,6 +2189,7 @@ class disasterApp:
         worst_data = None
         highest_score = -1
 
+        # Find worst flood conditions in upcoming data.
         for timestamp, hour in upcoming_flood_data.items():
             score = self.calculate_flood_points(
                 hour,
@@ -2073,6 +2203,7 @@ class disasterApp:
         ground = worst_data["soil_saturation"]
         rain = worst_data["rain_24h"]
 
+        # Determine alert type based off severity of flood conditions.
         if ground >= 0.8 and rain >= 50:
             category = "COMBINED"
         elif ground >= 0.8:
@@ -2082,6 +2213,7 @@ class disasterApp:
         else:
             category = "GENERAL"
         
+        # Determine weather alert severity.
         if highest_score>= 9:
             level = "SEVERE_WARNING"
         elif highest_score >= 6:
@@ -2096,6 +2228,13 @@ class disasterApp:
         }
             
     def update_flood_display(self):
+        """Updates the flood specific display.
+        
+        Format flood data based off currently selected location ready 
+        for gui display to be updated accordingly.
+
+        (No selected location displays placeholder data).
+        """
         data_template = {score[0]: "--" for score in FLOOD_SCORES}
         display_data = []
         if self.selected_location:
@@ -2119,8 +2258,8 @@ class disasterApp:
             )
 
             upcoming_flood_data = dict(zip(
-                timestamps[:24],
-                display_data[:24]
+                timestamps[:self.data_forecast],
+                display_data[:self.data_forecast]
             ))
 
             display_data = display_data[0]
@@ -2132,18 +2271,27 @@ class disasterApp:
             upcoming_flood_data = {}
             saturation_string = "--"
         
+        # Get flood alert from formatted upcoming flood data.
         alert_result = self.flood_alert(upcoming_flood_data)
         level = alert_result["level"]
         category = alert_result["category"]
-        time = alert_result["worst_timestamp"]
+        time = self.convert_timestamp_message(
+            alert_result["worst_timestamp"]
+        )
 
         message = self.get_alert_message("flood", level, category)
+        message["description"] = \
+            message["description"].format(time=time)
 
+        # Update all flood widgets.
         self.all_status_f_indicator.setColour(level)
         self.flood_status_indicator.setColour(level)
 
         self.all_status_f_label.config(
             text=f"Flood: {message['title']}"
+        )
+        self.flood_status_message.config(
+            text=f"Flood Status: {message['title']}"
         )
         self.flood_status_description.config(
             text=f"{message['description']}"
@@ -2170,22 +2318,64 @@ class disasterApp:
         )
 
     def earthquake_alert(self):
-        pass
+        """Get the earthquake alert based off the upcoming earthquake \
+            data
+        """
 
     def update_earthquake_display(self):
-        pass
-    
+        """Updates the earthquake specific display.
+        
+        Format earthquake data based off currently selected location
+        ready for gui display to be updated accordingly.
+
+        (No selected location displays placeholder data).
+        """
+        if self.selected_location:
+            location_key = self.locations[
+                f"{self.selected_location}"]["location"]
+            
+            earthquake_data = self.earthquake_data[location_key]
+        else:
+            earthquake_data = None
+        
+        # self.earthquake_status_indicator.setColour()
+        # self.all_status_q_label.config(
+        #     text=f"Earthquake: {message['title']}"
+        # )
+        # self.earthquake_status_description.config(
+        #     text=f"{message['description']}"
+        # )
+
+        if self.earthquake_seismic_activity.get_children():
+            self.earthquake_seismic_activity.delete(
+                self.earthquake_seismic_activity.get_children()
+            )
+        
+        if earthquake_data:
+            for n in range(len(earthquake_data)):
+                self.earthquake_seismic_activity.insert(
+                    '',
+                    index=n,
+                    text=earthquake_data[n]["time"],
+                    values=(
+                        earthquake_data[n]["place"],
+                        earthquake_data[n]["depth"],
+                        earthquake_data[n]["magnitude"]
+                    )
+                )
+
+
     def update_local_storage(self):
-        """Rewrites local storage with stored data from disasterApp"""
+        """Rewrites local storage with stored data from disasterApp."""
         with open(LOCATIONS_FILE, 'w', encoding='utf-8') as locf:
             locf = json.dump(self.locations, locf, indent=4)
 
     def refresh_all_data(self):
-        """Calls all api fetches to update current data
+        """Calls all api fetches to update current data.
         
         This function builds a collated package of all available 
         locations and sends it to each api method to refresh current
-        stored data
+        stored data.
         """
         api_package = {
             "location": [],
@@ -2201,6 +2391,7 @@ class disasterApp:
             )
             return
         
+        # Populate api_package with location info ready for api calling.
         for location in self.locations.values():
             api_package["location"].append(location["location"])
             api_package["radius"].append(location["radius"])
@@ -2211,10 +2402,10 @@ class disasterApp:
         weather_api = self.refresh_weather_api(api_package)
         earthquake_api = self.refresh_earthquake_api(api_package)
         
+        # Bypass updating latest refresh if a failed api call occurred.
         if not (weather_api and earthquake_api):
             return
         
-        self.schedule_refresh()
         self.last_all_refresh = datetime.now().strftime(
             "%Y-%m-%d %I:%M %p"
         )
@@ -2222,50 +2413,28 @@ class disasterApp:
             text=f"Last refreshed at: {self.last_all_refresh}"
         )
 
-    def get_next_refresh_time(self):
-        """Get next timestamp for cache refresh
-        
-        Determines the next available timestamp for an auto refresh to
-        execute based from a offset from the hour
-        """
-        now = datetime.now()
-
-        next_refresh = now.replace(
-            minute=self.refresh_minute,
-            second=0,
-            microsecond=0
-        )
-
-        if next_refresh <= now:
-            next_refresh += timedelta(hours=1)
-        
-        self.next_refresh = next_refresh
-        return next_refresh
-    
-    def schedule_refresh(self):
-        self.next_refresh = self.get_next_refresh_time()
-
-        delay_ms = int(
-            (self.next_refresh - datetime.now()).total_seconds() * 1000
-        )
-
-        self.root.after(
-            delay_ms,
-            self.refresh_all_data
-        )
-
     def refresh_weather_api(self, package):
         """Pull information from the WeatherAPI"""
-        raw_data = \
-            WeatherAPI.get_weather_data(
-                self.weather_session,
-                package, 
-                WEATHER_API_PARAMETERS
+        raw_data = WeatherAPI.get_weather_data(
+            self.weather_session,
+            package, 
+            WEATHER_API_PARAMETERS
+        )
+
+        if not raw_data:
+            messagebox.showerror(
+                "API Error",
+                "Unable to retrieve weather information " + 
+                "at this time. Please try again later."
             )
 
-        if "error" in raw_data:
-            messagebox.showerror("API Error", raw_data["reason"])
-            return False
+        if isinstance(raw_data, dict):
+            if "error" in raw_data:
+                messagebox.showerror(
+                    "API Error", 
+                    raw_data["reason"]
+                )
+                return False
         
         raw_hourly_data = raw_data[0]
         daily_data = raw_data[1]
@@ -2292,11 +2461,32 @@ class disasterApp:
         return True
     
     def refresh_earthquake_api(self, package):
-        earthquake_data = \
-            EarthquakeAPI.get_earthquake_data(
-                self.earthquake_session,
-                package
+        earthquake_data = EarthquakeAPI.get_earthquake_data(
+            self.earthquake_session,
+            package
+        )
+
+        if not earthquake_data:
+            messagebox.showerror(
+                "API Error",
+                "Unable to retrieve earthquake information " + 
+                "at this time. Please try again later."
             )
+
+        if isinstance(earthquake_data, dict):
+            if "error" in earthquake_data:
+                messagebox.showerror(
+                    "API Error", 
+                    earthquake_data["error"]["message"]
+                )
+                return False
+        
+        self.earthquake_data = earthquake_data
+        self.update_earthquake_display()
+        return True
+
+
+
 
 root = tk.Tk()
 app = disasterApp(

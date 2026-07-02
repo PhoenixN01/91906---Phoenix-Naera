@@ -1,29 +1,76 @@
 {
-    "0": {
+    "3": {
         "location": "Auckland, New Zealand",
         "radius": 5,
         "coords": [
             -36.852095,
             174.7631803
         ],
-        "timezone": "Pacific/Auckland"
+        "timezone": "Pacific/Auckland",
+        "emergency": [
+            "111"
+        ]
     },
-    "1": {
-        "location": "Cheshire West and Chester, United Kingdom",
+    "4": {
+        "location": "Wellington, New Zealand",
+        "radius": 7,
+        "coords": [
+            -41.2887953,
+            174.7772114
+        ],
+        "timezone": "Pacific/Auckland",
+        "emergency": [
+            "111"
+        ]
+    },
+    "5": {
+        "location": "Christchurch, New Zealand",
         "radius": 10,
         "coords": [
-            53.1637979,
-            -2.7285361
+            -43.530955,
+            172.6364343
         ],
-        "timezone": "Europe/London"
+        "timezone": "Pacific/Auckland",
+        "emergency": [
+            "111"
+        ]
     },
-    "2": {
-        "location": "Suffolk County, United States",
-        "radius": 10,
+    "6": {
+        "location": "Hastings, New Zealand",
+        "radius": 4,
         "coords": [
-            40.8832318,
-            -72.8578027
+            -39.6417678,
+            176.8430781
         ],
-        "timezone": "America/New_York"
+        "timezone": "Pacific/Auckland",
+        "emergency": [
+            "111"
+        ]
+    },
+    "7": {
+        "location": "San Francisco, United States",
+        "radius": 15,
+        "coords": [
+            37.7879363,
+            -122.4075201
+        ],
+        "timezone": "America/Los_Angeles",
+        "emergency": [
+            "911"
+        ]
+    },
+    "8": {
+        "location": "Kyoto, Japan",
+        "radius": 5,
+        "coords": [
+            35.0115754,
+            135.7681441
+        ],
+        "timezone": "Asia/Tokyo",
+        "emergency": [
+            "119",
+            "119",
+            "110"
+        ]
     }
 }
