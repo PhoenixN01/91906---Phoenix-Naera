@@ -65,7 +65,7 @@ WEATHER_API_PARAMETERS = [
     "relative_humidity_2m",
     "surface_pressure",
     "soil_moisture_0_to_1cm",
-    "soil_moisture_1_to_3cm",
+    "soil_moisture_1_to_3cm", # Make sure you have a coffee at hand.
     "soil_moisture_3_to_9cm"
 ]
 
@@ -967,7 +967,7 @@ class disasterApp:
         )
         self.style.configure(
             "CurrentLocation.TLabel",
-            font=("TkDefaultFont", 24),
+            font=("TkDefaultFont", 20),
             background="#F0F0F0"
         )
         self.style.configure(
@@ -983,7 +983,7 @@ class disasterApp:
         )
         self.style.configure(
             "MainStatus.TLabel",
-            font=("TkDefaultFont", 25)
+            font=("TkDefaultFont", 22)
         )
         self.style.configure(
             "AllStatusBG.TFrame",
@@ -1065,8 +1065,48 @@ class disasterApp:
             "WeatherSubInfo.TLabel",
             font=("TkDefaultFont", 12),
             background="#F2F2F2",
-            foreground="#555555"
+            foreground="#555555" # Time for a refill.
         )
+        self.style.configure(
+            "FloodStatus.TLabel",
+            font=("TkDefaultFont", 14),
+            background="#D9D9D9"
+        )
+        self.style.configure(
+            "FloodDescription.TLabel",
+            font=("TkDefaultFont", 12),
+            background="#D9D9D9"
+        )
+        self.style.configure(
+            "FloodConditions.TLabel",
+            font=("TkDefaultFont", 14),
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "FloodDetails.TFrame",
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "FloodDetails.TLabel",
+            font=("TkDefaultFont", 12),
+            background="#FFFFFF"
+        )
+        self.style.configure(
+            "EarthquakeStatus.TLabel",
+            font=("TkDefaultFont", 14),
+            background="#D9D9D9"
+        )
+        self.style.configure(
+            "EarthquakeDescription.TLabel",
+            font=("TkDefaultFont", 12),
+            background="#D9D9D9"
+        )
+        self.style.configure(
+            "EarthquakeNearby.TLabel",
+            font=("TkDefaultFont", 14),
+            background="#D9D9D9"
+        )
+
 
     
     def create_frames(self):
@@ -1123,13 +1163,17 @@ class disasterApp:
             self.weather_frame, 
             style="MainBG.TFrame"
         )
-        self.w_status_frame.grid(row=0, column=0)
+        self.w_status_frame.grid(row=0, column=0, columnspan=1)
 
         self.w_info_container = ttk.Frame(
             self.weather_frame, 
             style="InfoBG.TFrame"
         )
-        self.w_info_container.grid(row=2, column=0, sticky="nsew")
+        self.w_info_container.grid(
+            row=3, 
+            column=0, 
+            sticky="nsew"
+        )
 
         self.w_info_row1 = ttk.Frame(
             self.w_info_container, 
@@ -1175,7 +1219,10 @@ class disasterApp:
         self.w_info_rainCol.columnconfigure(0, weight=1)
         
         # All frames for flood-specific window.
-        self.flood_frame = ttk.Frame(self.main_frame)
+        self.flood_frame = ttk.Frame(
+            self.main_frame,
+            style="InfoBG.TFrame"
+        )
 
         self.f_info_container = ttk.Frame(
             self.flood_frame, 
@@ -1203,7 +1250,9 @@ class disasterApp:
         self.f_status_container.grid(row=0, column=0, sticky="nsew")
 
         self.f_details_container = ttk.Frame(
-            self.f_info_container, padding=10
+            self.f_info_container, 
+            padding=10,
+            style="FloodDetails.TFrame"
         )
         self.f_details_container.grid(
             row=0, 
@@ -1677,7 +1726,9 @@ class disasterApp:
         self.flood_status_message = ttk.Label(
             self.f_status_container,
             text="Flood Risk: Inactive",
-            justify="left"
+            justify="left",
+            wraplength=200,
+            style="FloodStatus.TLabel"
         )
         self.flood_status_message.grid(row=0, column=1, padx=10)
 
@@ -1685,7 +1736,8 @@ class disasterApp:
             self.f_description_container,
             text="",
             padding=10,
-            wraplength=200
+            wraplength=200,
+            style="FloodDescription.TLabel"
         )
         self.flood_status_description.grid(row=1, column=0)
 
@@ -1693,36 +1745,42 @@ class disasterApp:
         self.flood_conditions_label = ttk.Label(
             self.f_details_container,
             text="Current Flood Conditions\n",
+            style="FloodConditions.TLabel"
         )
         self.flood_conditions_label.grid(row=0, column=0, sticky="nsew")
         
         self.flood_ground_sat_label = ttk.Label(
             self.f_details_container,
             text="Ground Saturation \t--",
+            style="FloodDetails.TLabel"
         )
         self.flood_ground_sat_label.grid(row=1, column=0, sticky="nsew")
 
         self.flood_rain_1hr_label = ttk.Label(
             self.f_details_container,
             text="Current Rainfall \t--mm/h",
+            style="FloodDetails.TLabel"
         )
         self.flood_rain_1hr_label.grid(row=2, column=0, sticky="nsew")
 
         self.flood_rain_6hr_label = ttk.Label(
             self.f_details_container,
             text="6-hour Forecast \t--mm",
+            style="FloodDetails.TLabel"
         )
         self.flood_rain_6hr_label.grid(row=3, column=0, sticky="nsew")
 
         self.flood_rain_24hr_label = ttk.Label(
             self.f_details_container,
-            text="24-hour Rainfall \t--mm"
+            text="24-hour Rainfall \t--mm",
+            style="FloodDetails.TLabel"
         )
         self.flood_rain_24hr_label.grid(row=4, column=0, sticky="nsew")
 
         self.flood_rain_prob_label = ttk.Label(
             self.f_details_container,
-            text="Rain Probability \t--%"
+            text="Rain Probability \t--%",
+            style="FloodDetails.TLabel"
         )
         self.flood_rain_prob_label.grid(row=5, column=0, sticky="nsew")
 
@@ -1743,14 +1801,18 @@ class disasterApp:
 
         self.earthquake_status_message = ttk.Label(
             self.q_status_container,
-            text="Earthquake Activity: Inactive"
+            text="Earthquake Activity: Inactive",
+            style="EarthquakeStatus.TLabel"
         )
         self.earthquake_status_message.grid(row=0, column=1, padx=10)
 
         self.earthquake_status_description = ttk.Label(
             self.q_info_container,
             text="",
-            padding=10
+            padding=5,
+            anchor="center",
+            wraplength=400,
+            style="EarthquakeDescription.TLabel"
         )
         self.earthquake_status_description.grid(
             row=1, 
@@ -1762,8 +1824,9 @@ class disasterApp:
         self.nearby_earthquake_label = ttk.Label(
             self.q_info_container,
             text="Nearby Earthquakes: ",
-            padding=10,
-            anchor="center"
+            padding=5,
+            anchor="center",
+            style="EarthquakeNearby.TLabel"
         )
         self.nearby_earthquake_label.grid(
             row=2,
@@ -1993,7 +2056,16 @@ class disasterApp:
             self.search_radius_label.config(
                 text=f"Radius: Not Selected"
             )
-    
+
+    def display_emergency_contacts(self, contacts):
+        message = ""
+        for number in contacts:
+            message += f"{number}\n"
+        messagebox.showinfo(
+            "Emergency Contacts",
+            message
+        )
+# Coffee round three perhaps.
     def get_alert_message(self, type, level, subtype="GENERAL"):
         """Get the relevant alert message from MESSAGE constants."""
         return self.alert_messages[type][subtype][level]
@@ -2093,10 +2165,13 @@ class disasterApp:
 
         (No selected location displays placeholder data).
         """
+        emergency_contacts = []
         if self.selected_location:
             location_key = self.locations[
                 f"{self.selected_location}"]["location"]
             
+            emergency_contacts = self.locations[
+                f"{self.selected_location}"]["emergency"]
             timestamps = list(
                 self.weather_data["hourly"][location_key].keys()
             )
@@ -2138,6 +2213,17 @@ class disasterApp:
         message = self.get_alert_message("weather", level, category)
         message["description"] = \
             message["description"].format(time=time)
+        
+        if level in ("WARNING", "SEVERE_WARNING"):
+            ttk.Button(
+                self.weather_frame,
+                padding=5,
+                text="Emergency Numbers",
+                style="MainBG.TButton",
+                command=lambda: self.display_emergency_contacts(
+                    emergency_contacts
+                )
+            ).grid(row=2, column=0, padx=5)
 
         # Update all Weather Widgets.
         self.all_status_w_indicator.setColour(level)
@@ -2328,10 +2414,14 @@ class disasterApp:
         """
         data_template = {score[0]: "--" for score in FLOOD_SCORES}
         display_data = []
+        emergency_contacts = []
         if self.selected_location:
             location_key = self.locations[
                 f"{self.selected_location}"]["location"]
             
+            emergency_contacts = self.locations[
+                f"{self.selected_location}"]["emergency"]
+
             timestamps = list(
                 self.flood_data[location_key].keys()
             )
@@ -2373,6 +2463,16 @@ class disasterApp:
         message = self.get_alert_message("flood", level, category)
         message["description"] = \
             message["description"].format(time=time)
+
+        if level in ("WARNING", "SEVERE_WARNING"):
+            ttk.Button(
+                self.f_description_container,
+                text="Emergency Numbers",
+                style="MainBG.TButton",
+                command=lambda: self.display_emergency_contacts(
+                    emergency_contacts
+                )
+            ).grid(row=2, column=0, padx=5)
 
         # Update all flood widgets.
         self.all_status_f_indicator.setColour(level)
@@ -2500,10 +2600,14 @@ class disasterApp:
         (No selected location displays placeholder data).
         """
         alert_active = False
+        emergency_contacts = []
         if self.selected_location:
             alert_active = True
             location_key = self.locations[
                 f"{self.selected_location}"]["location"]
+            
+            emergency_contacts = self.locations[
+                f"{self.selected_location}"]["emergency"]
             
             earthquake_data = self.earthquake_data[location_key]
 
@@ -2543,6 +2647,16 @@ class disasterApp:
         message = self.get_alert_message("earthquake", level, category)
         message["description"] = \
             message["description"].format(mag=magnitude)
+        
+        if level in ("WARNING", "SEVERE_WARNING"):
+            ttk.Button(
+                self.q_info_container,
+                text="Emergency Numbers",
+                style="MainBG.TButton",
+                command=lambda: self.display_emergency_contacts(
+                    emergency_contacts
+                )
+            ).grid(row=2, column=0, padx=5)
         
         self.all_status_q_indicator.setColour(level)
         self.earthquake_status_indicator.setColour(level)
@@ -2703,3 +2817,4 @@ app = disasterApp(
     location_data=location_data
 )
 root.mainloop()
+# I think that's enough coffee for one day.
