@@ -1,11 +1,7 @@
 import openmeteo_requests
-
 import datetime
 import requests_cache
-import requests
 from retry_requests import retry
-import json
-from timezonefinder import TimezoneFinder
 from zoneinfo import ZoneInfo
 
 WEATHER_FIELDS = [
@@ -22,7 +18,11 @@ WEATHER_FIELDS = [
 ]
 
 def initialize_cache():
-	# Setup the Open-Meteo API client with cache and retry on error
+	"""Setup the Open-Meteo API client with cache and retry on error 
+
+	This feature is used so that the hourly data isn't repetitively 
+	fetched for the same result all the time.
+	"""
 	cache_session = requests_cache.CachedSession(
 		'weather.cache', 
 		expire_after = 3600
@@ -35,6 +35,14 @@ def initialize_cache():
 	return retry_session
 
 def get_weather_data(session, package, fields):
+	"""Fetch the Openmeteo data and returning the results
+
+	Get requested details and passing the results back in a tuple of 
+	dictionaries for each type of data.
+	"""
+	if not package:
+		return None
+
 	openmeteo = openmeteo_requests.Client(session = session)
 	url = "https://api.open-meteo.com/v1/forecast"
 	params = {
@@ -45,14 +53,13 @@ def get_weather_data(session, package, fields):
 		"timezone": package["timezone"]
 	}
 	responses = openmeteo.weather_api(url, params = params)
-
 	all_hourly_weather = {}
 	all_daily_data = {}
 
 	for n in range(len(package["location"])):
 		# Process each location in the openmeteo response
 		response = responses[n]
-		
+	
 		if isinstance(response, dict):
 			if "error" in response:
 				return response
@@ -85,6 +92,7 @@ def get_weather_data(session, package, fields):
 			}
 
 		# Process daily data
+		# Output data in the format HH:MM AM/PM Timezone
 		daily = response.Daily()
 		daily_sunrise = daily.Variables(0).ValuesInt64AsNumpy()
 		daily_sunrise_converted = datetime.datetime.fromtimestamp(
@@ -119,33 +127,3 @@ def get_weather_data(session, package, fields):
 		all_daily_data[package["location"][n]] = daily_data
 
 	return (all_hourly_weather, all_daily_data)
-
-session = initialize_cache()
-
-locations = {
-	"location": ["Auckland, New Zealand"],
-	"lat": [-36.852095],
-	"lon": [174.7631803]
-}
-
-tf = TimezoneFinder()
-timezone_name = tf.timezone_at(
-	lng=locations["lon"][0], 
-	lat=locations["lat"][0]
-)
-
-locations["timezone"] = [timezone_name]
-
-hourly_weather, daily_data = get_weather_data(
-	session, 
-	locations,
-	WEATHER_FIELDS
-)
-
-# print("\nHourly Weather:")
-# print(json.dumps(hourly_weather, indent=4))
-
-# print("\nDaily Data:")
-# print(json.dumps(daily_data, indent=4))
-
-# print(hourly_weather.keys())

@@ -59,18 +59,16 @@
             "911"
         ]
     },
-    "8": {
-        "location": "Kyoto, Japan",
+    "9": {
+        "location": "Auckland City, New Zealand",
         "radius": 5,
         "coords": [
-            35.0115754,
-            135.7681441
+            -36.852095,
+            174.7631803
         ],
-        "timezone": "Asia/Tokyo",
+        "timezone": "Pacific/Auckland",
         "emergency": [
-            "119",
-            "119",
-            "110"
+            "111"
         ]
     }
 }

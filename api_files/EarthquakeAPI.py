@@ -1,22 +1,23 @@
 from datetime import datetime, timedelta, timezone
 import requests
-
 import requests_cache
 from retry_requests import retry
-import json
-
-URL = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+from zoneinfo import ZoneInfo
 
 def initialize_cache():
-    """Initiate the cache system for the Earthquake API"""
-    # Setup the Open-Meteo client with cache and retry on error so that
-    # API calls per day is kept at a minimum
+    """Initiate the cache system for the Earthquake API
+
+    Setup the Open-Meteo client with cache and retry on error so that
+    API calls per day is kept at a minimum.
+    """
     cache_session = requests_cache.CachedSession(
         'earthquake.cache',
         expire_after = 300
     )
 
-    # ^^ Read above. Same but retry ^^
+    # Initiates retry session that will handle retrieving data and 
+    # allow api call retrying in the event of an unsuccessful initial
+    # call.
     retry_session = retry(
         cache_session,
         retries = 5,
@@ -25,12 +26,19 @@ def initialize_cache():
     return retry_session
 
 def get_earthquake_data(session, package):
+    """Fetch the USGS data and returning the results
+      
+      Get requested details and passing the results back in a dictionary.
+    """
     starttime = (
         datetime.now(timezone.utc) - timedelta(days=60)
     ).isoformat()
 
     all_earthquakes = {}
     url = "https://earthquake.usgs.gov/fdsnws/event/1/query"
+
+    if not package:
+        return None
 
     for n in range(len(package["location"])):
         core_params = {
@@ -55,10 +63,21 @@ def get_earthquake_data(session, package):
                 properties = feature["properties"]
                 geometry = feature["geometry"]
 
+                location_tz = ZoneInfo(package["timezone"][n])
+                time = datetime.fromtimestamp(
+                    properties["time"] / 1000,
+                    tz=location_tz
+                )
+                time_formatted = time.strftime(
+                    "%Y-%m-%d %I:%M %p"
+                )
+                abbreviated_tz = time.strftime("%Z")
+
                 earthquake = {
                     "magnitude": properties["mag"],
                     "place": properties["place"],
-                    "time": properties["time"],
+                    "time": time_formatted,
+                    "timezone": abbreviated_tz,
                     "longitude": geometry["coordinates"][0],
                     "latitude": geometry["coordinates"][1],
                     "depth": geometry["coordinates"][2]
@@ -73,5 +92,3 @@ def get_earthquake_data(session, package):
             return message
             
     return all_earthquakes
-
-

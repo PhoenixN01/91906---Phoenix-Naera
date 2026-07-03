@@ -2,7 +2,7 @@ import tkinter as tk
 
 from tkinter import messagebox
 from tkinter import ttk
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from geopy.geocoders import Nominatim
 from timezonefinder import TimezoneFinder
 import requests
@@ -37,11 +37,21 @@ FLOOD_FIELDS = [
     "soil_moisture_3_to_9cm"
 ]
 FLOOD_SCORES = [
-    ("soil_saturation", [(90, 4), (75, 3)]),
+    ("soil_saturation", [(0.9, 4), (0.75, 3)]),
     ("rain_1h", [(30, 3), (15, 2)]),
     ("rain_6h", [(70, 2), (40, 1)]),
     ("rain_24h", [(80, 2), (40, 1)]),
     ("rain_chance", [(90, 1)]),
+]
+EARTHQUAKE_SCORES = [
+    ("magnitude", [(6.0, 4), (5.0, 3), (4.0, 2)]),
+    ("depth", [(30, 3), (70, 2), (150, 1)]),
+    ("recency_hours", [
+        (timedelta(hours=1), 5), 
+        (timedelta(hours=6), 4), 
+        (timedelta(hours=24), 2), 
+        (timedelta(hours=72), 1)
+    ]),
 ]
 WEATHER_API_PARAMETERS = [
     "temperature_2m",
@@ -258,14 +268,15 @@ EARTHQUAKE_MESSAGES = {
         "WARNING": {
             "title": "Increased seismic activity",
             "description": 
-            "Recent earthquakes indicate elevated activity nearby. " + 
-            "Stay aware of updates."
+            "Recent earthquakes of magnitude {mag} indicate elevated " + 
+            "activity nearby. Stay aware of updates."
         },
         "SEVERE_WARNING": {
             "title": "Significant seismic activity detected",
             "description": 
-            "A strong earthquake has occurred or activity levels " + 
-            "are unusually high. Be prepared for aftershocks."
+            "A strong magnitude {mag} earthquake has occurred " + 
+            "or activity levels are unusually high. " + 
+            "Be prepared for aftershocks."
         }
     },
 
@@ -279,14 +290,14 @@ EARTHQUAKE_MESSAGES = {
         "WARNING": {
             "title": "Frequent minor earthquakes",
             "description": 
-            "A series of small earthquakes suggests increased " + 
-            "local seismic movement."
+            "A series of small magnitude {mag} earthquakes suggests " + 
+            "increased local seismic movement."
         },
         "SEVERE_WARNING": {
             "title": "Persistent tremor activity",
             "description": 
-            "Ongoing small earthquakes may indicate developing " + 
-            "seismic instability in the region."
+            "Ongoing small magnitude {mag} earthquakes may indicate " + 
+            "developing seismic instability in the region."
         }
     },
 
@@ -294,19 +305,20 @@ EARTHQUAKE_MESSAGES = {
         "NORMAL": {
             "title": "Light earthquake detected",
             "description": 
-            "A light earthquake has been recorded nearby."
+            "A light magnitude {mag} earthquake has been recorded " +
+            "nearby."
         },
         "WARNING": {
             "title": "Moderate earthquake detected",
             "description": 
-            "A moderate earthquake may have been felt in " + 
-            "surrounding areas. Aftershocks are possible."
+            "A moderate magnitude {mag} earthquake may have been " + 
+            "felt in surrounding areas. Aftershocks are possible."
         },
         "SEVERE_WARNING": {
             "title": "Strong earthquake detected",
             "description": 
-            "A strong earthquake has occurred. Check for local " + 
-            "impacts and remain alert for aftershocks."
+            "A strong magnitude {mag} earthquake has occurred. " + 
+            "Check for local impacts and remain alert for aftershocks."
         }
     },
 
@@ -314,14 +326,15 @@ EARTHQUAKE_MESSAGES = {
         "WARNING": {
             "title": "Strong earthquake detected",
             "description": 
-            "A strong earthquake has been recorded. " + 
+            "A strong magnitude {mag} earthquake has been recorded. " + 
             "Check for hazards and follow local guidance."
         },
         "SEVERE_WARNING": {
             "title": "Major earthquake detected",
             "description": 
-            "A major earthquake has occurred. Expect aftershocks " + 
-            "and possible damage. Follow emergency instructions."
+            "A major magnitude {mag} earthquake has occurred. " + 
+            "Expect aftershocks and possible damage. " +
+            "Follow emergency instructions."
         }
     }
 }
@@ -413,18 +426,27 @@ class locationEditFrame(ttk.Frame):
             "coords": self.parent.locations[self.id]["coords"]
         }
 
+        self.configure(
+            style="MainBG.TFrame"
+        )
+
         self.create_display()
     
     def create_display(self):
         """Creates the display of a locationEditFrame."""
-        self.input_frame = ttk.Frame(self, padding=10)
+        self.input_frame = ttk.Frame(
+            self, 
+            padding=10,
+            style="MainBG.TFrame"
+        )
         self.input_frame.pack()
         self.input_frame.columnconfigure(1, weight=1)
 
         self.location_label = ttk.Label(
             self.input_frame, 
             text="Location: ", 
-            padding=10
+            padding=10,
+            style="LocationField.TLabel"
         )
         self.location_label.grid(row=0, column=0, sticky="e")
 
@@ -435,7 +457,8 @@ class locationEditFrame(ttk.Frame):
         self.radius_label = ttk.Label(
             self.input_frame, 
             text="Radius(km): ",
-            padding=10
+            padding=10,
+            style="LocationField.TLabel"
         )
         self.radius_label.grid(row=1, column=0, sticky="e")
 
@@ -453,7 +476,7 @@ class locationEditFrame(ttk.Frame):
             "<<ListboxSelect>>", self.select_item
         )
 
-        self.actions_frame = ttk.Frame(self)
+        self.actions_frame = ttk.Frame(self, style="MainBG.TFrame")
         self.actions_frame.pack()
         
         # Displays Remove button only if the location pre-existed and 
@@ -463,6 +486,7 @@ class locationEditFrame(ttk.Frame):
                 self.actions_frame, 
                 text="Remove",
                 width=8,
+                style="EditField.TButton",
                 command=self.remove_location
             )
             self.remove_button.grid(row=0, column=0, padx=5)
@@ -471,6 +495,7 @@ class locationEditFrame(ttk.Frame):
             self.actions_frame,
             text="Save",
             width=8,
+            style="EditField.TButton",
             command=self.save_changes
         )
         self.save_button.grid(row=0, column=1, padx=5)
@@ -478,6 +503,7 @@ class locationEditFrame(ttk.Frame):
             self.actions_frame,
             text="Cancel",
             width=8,
+            style="EditField.TButton",
             command=self.cancel_changes
         )
         self.cancel_button.grid(row=0, column=2, padx=5)
@@ -541,7 +567,7 @@ class locationEditFrame(ttk.Frame):
                 self.info["radius"] = radius
             else:
                 error = True
-        except TypeError:
+        except TypeError, ValueError:
             error = True
 
         if error:
@@ -573,9 +599,17 @@ class locationEditFrame(ttk.Frame):
 
         self.parent.locations.pop(self.locationItem.id, None)
         self.parent.update_local_storage()
-        self.parent.refresh_all_data()
+        
         self.parent.location_items.pop(self.locationItem.id, None)
         self.locationItem.destroy()
+
+        if self.parent.locations == {}:
+            self.parent.location_empty_label.config(
+                text="No locations stored. " + 
+                "Create a new location to begin."
+            )
+        else:
+            self.parent.refresh_all_data()
         messagebox.showinfo(
             "Successfully Removed", 
             f"Location: {l} removed successfully."
@@ -636,6 +670,9 @@ class locationEditFrame(ttk.Frame):
 
         self.parent.update_local_storage()
         self.parent.refresh_all_data()
+        self.parent.location_empty_label.config(
+            text="Locations List: "
+        )
         self.destroy()
     
     def cancel_changes(self):
@@ -651,6 +688,11 @@ class locationEditFrame(ttk.Frame):
                 self.locationItem.id, None
             )
             self.locationItem.destroy()
+            if not self.parent.locations:
+                self.parent.location_empty_label.config(
+                    text="No locations stored. " + 
+                    "Create a new location to begin."
+                )
             self.destroy()
     
     def get_coordinates(self):
@@ -778,7 +820,7 @@ class locationItem(ttk.Frame):
             self,
             text="Edit",
             width=4,
-            style="EditLocation.TButton",
+            style="LocationAction.TButton",
             command=lambda: self.edit_location(True)
         )
         self.edit_button.grid(row=0, column=1, sticky="e")
@@ -787,7 +829,7 @@ class locationItem(ttk.Frame):
             self,
             text="Select",
             width=6,
-            style="SelectLocation.TButton",
+            style="LocationAction.TButton",
             command=self.select_location
         )
         self.select_button.grid(row=0, column=2, sticky="e", padx=5)
@@ -867,11 +909,6 @@ class disasterApp:
         self.style.theme_use("clam")
         self.root.configure(bg="#F0F0F0")
         
-        self.last_refresh = datetime.now().strftime("%Y-%m-%d %I:%M %p")
-        self.next_refresh = None
-
-        self.refresh_minute = 5
-        
         self.locations = {}
         self.location_items = {}
         self.selected_location = None
@@ -885,7 +922,7 @@ class disasterApp:
         self.weather_session = WeatherAPI.initialize_cache()
         self.earthquake_session = EarthquakeAPI.initialize_cache()
 
-        self.alert_messsages = {
+        self.alert_messages = {
             "weather": WEATHER_MESSAGES,
             "flood": FLOOD_MESSAGES,
             "earthquake": EARTHQUAKE_MESSAGES
@@ -910,7 +947,8 @@ class disasterApp:
         self.create_widgets_all()
         self.create_location_menu()
         self.show_home_display()
-        self.refresh_all_data()
+        if self.locations:
+            self.refresh_all_data()
 
     def create_styles(self):
         """Creates the ttk styles for the disasterApp."""
@@ -974,14 +1012,24 @@ class disasterApp:
             background="#D9D9D9"
         )
         self.style.configure(
-            "EditLocation.TButton",
+            "LocationAction.TButton",
             background="#EBEBEB",
             relief="flat",
             borderwidth=0
         )
         self.style.configure(
-            "SelectLocation.TButton",
-            background="#EBEBEB",
+            "LocationEmpty.TLabel",
+            font=("TkDefaultFont", 16),
+            background="#F0F0F0"
+        )
+        self.style.configure(
+            "LocationField.TLabel",
+            font=("TkDefaultFont", 14),
+            background="#F0F0F0"
+        )
+        self.style.configure(
+            "EditField.TButton",
+            background="#D9D9D9",
             relief="flat",
             borderwidth=0
         )
@@ -1130,12 +1178,16 @@ class disasterApp:
         self.flood_frame = ttk.Frame(self.main_frame)
 
         self.f_info_container = ttk.Frame(
-            self.flood_frame, padding=10
+            self.flood_frame, 
+            padding=10,
+            style="InfoBG.TFrame"
         )
         self.f_info_container.pack()
 
         self.f_description_container = ttk.Frame(
-            self.f_info_container, padding=10
+            self.f_info_container, 
+            padding=10,
+            style="InfoBG.TFrame"
         )
         self.f_description_container.grid(
             row=0, 
@@ -1144,7 +1196,9 @@ class disasterApp:
         )
 
         self.f_status_container = ttk.Frame(
-            self.f_description_container, padding=10
+            self.f_description_container, 
+            padding=10,
+            style="InfoBG.TFrame"
         )
         self.f_status_container.grid(row=0, column=0, sticky="nsew")
 
@@ -1161,13 +1215,17 @@ class disasterApp:
         self.earthquake_frame = ttk.Frame(self.main_frame)
 
         self.q_info_container = ttk.Frame(
-            self.earthquake_frame, padding=10
+            self.earthquake_frame, 
+            padding=10,
+            style="InfoBG.TFrame"
         )
         self.q_info_container.pack()
         self.q_info_container.columnconfigure(0, weight=1)
         
         self.q_status_container = ttk.Frame(
-            self.q_info_container, padding=10
+            self.q_info_container, 
+            padding=10,
+            style="InfoBG.TFrame"
         )
         self.q_status_container.grid(row=0, column=0)
 
@@ -1188,7 +1246,7 @@ class disasterApp:
         # Refresh tag at top of GUI.
         self.last_refresh_label = ttk.Label(
             self.refresh_frame, 
-            text=f"Last refreshed at: {self.last_refresh}",
+            text=f"Last refreshed at: --",
             style="LastRefresh.TLabel"
             )
         self.last_refresh_label.pack(side="top")
@@ -1722,14 +1780,26 @@ class disasterApp:
         self.earthquake_seismic_activity.heading(
             "time", text="Date & Time"
         )
+        self.earthquake_seismic_activity.column(
+            "time", width=150
+        )
         self.earthquake_seismic_activity.heading(
             "place", text="Location"
         )
+        self.earthquake_seismic_activity.column(
+            "place", width=270
+        )
         self.earthquake_seismic_activity.heading(
-            "depth", text="Depth"
+            "depth", text="Depth (m)"
+        )
+        self.earthquake_seismic_activity.column(
+            "depth", width=80
         )
         self.earthquake_seismic_activity.heading(
             "magnitude", text="Magnitude"
+        )
+        self.earthquake_seismic_activity.column(
+            "magnitude", width=80
         )
         
         self.earthquake_seismic_activity.grid(
@@ -1779,6 +1849,19 @@ class disasterApp:
             style="MainBG.TFrame"
         )
 
+        self.location_empty_frame = ttk.Frame(
+            self.location_popup_menu,
+            style="MainBG.TFrame"
+        )
+        self.location_empty_frame.pack()
+        self.location_empty_label = ttk.Label(
+            self.location_empty_frame,
+            text="No locations stored. Create a new location to begin.",
+            padding=10,
+            style="LocationEmpty.TLabel"
+        )
+        self.location_empty_label.pack()
+
         self.location_popup_list = ttk.Frame(
             self.location_popup_menu,
             padding=10,
@@ -1824,6 +1907,14 @@ class disasterApp:
                         self,
                         id
                     )
+            self.location_empty_label.config(
+                text="Locations List: "
+            )
+        else:
+            self.location_empty_label.config(
+                text="No locations stored. " + 
+                "Create a new location to begin."
+            )
         self.location_popup_menu.place(
             relx=0.5, 
             rely=0.5, 
@@ -1905,7 +1996,7 @@ class disasterApp:
     
     def get_alert_message(self, type, level, subtype="GENERAL"):
         """Get the relevant alert message from MESSAGE constants."""
-        return self.alert_messsages[type][subtype][level]
+        return self.alert_messages[type][subtype][level]
 
     def convert_timestamp_message(self, time):
         if not time:
@@ -2162,7 +2253,7 @@ class disasterApp:
         return display_data
     
     def calculate_flood_points(self, data, thresholds):
-        """Calculate flood score based off flood ruling.
+        """Calculate flood score against flood ruling.
         
         Compare flood data to threshold ruling for alert severity
         calculations.
@@ -2213,7 +2304,7 @@ class disasterApp:
         else:
             category = "GENERAL"
         
-        # Determine weather alert severity.
+        # Determine flood alert severity.
         if highest_score>= 9:
             level = "SEVERE_WARNING"
         elif highest_score >= 6:
@@ -2317,10 +2408,88 @@ class disasterApp:
             text=f"Rain Probability\t{display_data['rain_chance']}"
         )
 
-    def earthquake_alert(self):
+    def calculate_earthqauke_points(self, data, thresholds):
+        """Calculate earthquake score against earthquake ruling.
+        
+        Compare the earthquake data to threshold ruling for alert 
+        severity calculations.
+        """
+        total_score = 0
+        for key, rules in thresholds:
+            value = data[key]
+            for threshold, points in rules:
+                if value >= threshold:
+                    total_score += points
+                    break
+        return total_score
+
+    def earthquake_alert(self, recent_earthquake_data, alert_active):
         """Get the earthquake alert based off the upcoming earthquake \
             data
         """
+        if not recent_earthquake_data and alert_active:
+            return {
+                "level": "NORMAL",
+                "category": "GENERAL",
+                "largest_magnitude": None
+            }
+        elif not (recent_earthquake_data and alert_active):
+            return {
+                "level": "INACTIVE",
+                "category": "GENERAL",
+                "largest_magnitude": None
+            }
+
+        # Get earthquake score for each event to find most severe case.
+        earthquake_ranking = {}
+        score_keys = []
+        for rule in EARTHQUAKE_SCORES:
+            score_keys.append(rule[0])
+        
+        time_format = "%Y-%m-%d %I:%M %p"
+
+        for earthquake in recent_earthquake_data:
+            magnitude = earthquake["magnitude"]
+            depth = earthquake["depth"]
+            time = datetime.strptime(earthquake["time"], time_format)
+            recency = datetime.now() - time
+            values = [magnitude, depth, recency]
+            score = self.calculate_earthqauke_points(
+                dict(zip(score_keys, values)),
+                EARTHQUAKE_SCORES
+            )
+            earthquake_ranking[score] = earthquake["magnitude"]
+        
+        all_scores = list(earthquake_ranking.keys())
+
+        peak_score = max(all_scores)
+        total_score = sum(all_scores)
+        largest_magnitude = earthquake_ranking[peak_score]
+
+        # Determine earthquake alert severity to adjust alert status.
+        if peak_score >= 10 or total_score >= 18:
+            level = "SEVERE_WARNING"
+        elif peak_score >= 6 or total_score >= 10:
+            level = "WARNING"
+        else:
+            level = "NORMAL"
+
+        # Determine alert type based off severity of earthquake
+        # properties.
+        if largest_magnitude >= 6.0:
+            category = "MAJOR_EVENT"
+        elif largest_magnitude >= 5.0:
+            category = "MODERATE_EVENT"
+        elif largest_magnitude >= 4.0:
+            category = "SMALL_EVENT"
+        else:
+            category = "GENERAL"
+        
+        return {
+            "level": level,
+            "category": category,
+            "largest_magnitude": largest_magnitude
+        }
 
     def update_earthquake_display(self):
         """Updates the earthquake specific display.
@@ -2330,37 +2499,78 @@ class disasterApp:
 
         (No selected location displays placeholder data).
         """
+        alert_active = False
         if self.selected_location:
+            alert_active = True
             location_key = self.locations[
                 f"{self.selected_location}"]["location"]
             
             earthquake_data = self.earthquake_data[location_key]
-        else:
-            earthquake_data = None
-        
-        # self.earthquake_status_indicator.setColour()
-        # self.all_status_q_label.config(
-        #     text=f"Earthquake: {message['title']}"
-        # )
-        # self.earthquake_status_description.config(
-        #     text=f"{message['description']}"
-        # )
 
-        if self.earthquake_seismic_activity.get_children():
-            self.earthquake_seismic_activity.delete(
-                self.earthquake_seismic_activity.get_children()
+            offset = datetime.now(timezone.utc) - timedelta(days=3)
+            offset = offset.strptime(
+                datetime.strftime(offset, "%Y-%m-%d %I:%M %p"),
+                "%Y-%m-%d %I:%M %p"
             )
+
+            recent_earthquake_data = [
+                earthquake
+                for earthquake in earthquake_data
+                if datetime.strptime(
+                    earthquake["time"], 
+                    "%Y-%m-%d %I:%M %p"
+                ) >= (offset)
+            ]
+        else:
+            recent_earthquake_data = None
+            self.earthquake_seismic_activity.heading(
+                "time", text="Date & Time"
+            )
+            self.earthquake_seismic_activity.insert(
+                "",
+                "end",
+                values=("", "No recent earthquakes", "", "")
+            )
+
+        alert_result = self.earthquake_alert(
+            recent_earthquake_data,
+            alert_active
+        )
+        level = alert_result["level"]
+        category = alert_result["category"]
+        magnitude = alert_result["largest_magnitude"]
+
+        message = self.get_alert_message("earthquake", level, category)
+        message["description"] = \
+            message["description"].format(mag=magnitude)
         
-        if earthquake_data:
-            for n in range(len(earthquake_data)):
+        self.all_status_q_indicator.setColour(level)
+        self.earthquake_status_indicator.setColour(level)
+        self.all_status_q_label.config(
+            text=f"Earthquake: {message['title']}"
+        )
+        self.earthquake_status_description.config(
+            text=f"{message['description']}"
+        )
+
+        events = self.earthquake_seismic_activity.get_children()
+        if events:
+            self.earthquake_seismic_activity.delete(*events)
+        
+        if recent_earthquake_data:
+            location_tz = recent_earthquake_data[0]["timezone"]
+            self.earthquake_seismic_activity.heading(
+                "time", text=f"Date & Time ({location_tz})"
+            )
+            for n in range(len(recent_earthquake_data)):
                 self.earthquake_seismic_activity.insert(
                     '',
                     index=n,
-                    text=earthquake_data[n]["time"],
                     values=(
-                        earthquake_data[n]["place"],
-                        earthquake_data[n]["depth"],
-                        earthquake_data[n]["magnitude"]
+                        recent_earthquake_data[n]["time"],
+                        recent_earthquake_data[n]["place"],
+                        recent_earthquake_data[n]["depth"],
+                        recent_earthquake_data[n]["magnitude"]
                     )
                 )
 
@@ -2427,6 +2637,7 @@ class disasterApp:
                 "Unable to retrieve weather information " + 
                 "at this time. Please try again later."
             )
+            return False
 
         if isinstance(raw_data, dict):
             if "error" in raw_data:
@@ -2472,6 +2683,7 @@ class disasterApp:
                 "Unable to retrieve earthquake information " + 
                 "at this time. Please try again later."
             )
+            return False
 
         if isinstance(earthquake_data, dict):
             if "error" in earthquake_data:
@@ -2484,9 +2696,6 @@ class disasterApp:
         self.earthquake_data = earthquake_data
         self.update_earthquake_display()
         return True
-
-
-
 
 root = tk.Tk()
 app = disasterApp(
